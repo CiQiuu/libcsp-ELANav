@@ -1,7 +1,5 @@
 #include <csp/csp_sfp.h>
-
 #include <stdlib.h>
-
 #include <csp/csp_buffer.h>
 #include <csp/csp_debug.h>
 #include "csp_macro.h"
@@ -85,8 +83,10 @@ int csp_sfp_send_own_memcpy(csp_conn_t * conn, const void * data, unsigned int t
 		sfp_header->totalsize = htobe32(totalsize);
 		sfp_header->offset = htobe32(count);
 
-		/* Send data */
+		csp_print("SFP SEND fragment: offset=%u size=%u total=%u\n", count, size, totalsize);
 		csp_send(conn, packet);
+		usleep(10000);
+		csp_print("SFP SEND done: offset=%u\n", count);
 
 		/* Increment count */
 		count += size;
@@ -125,6 +125,8 @@ int csp_sfp_recv_fp(csp_conn_t * conn, void ** return_data, int * return_datasiz
 			error = CSP_ERR_SFP;
 			goto error;
 		}
+
+		csp_print("SFP RECV fragment: offset=%" PRIu32 " len=%u total=%" PRIu32 "\n", sfp_header->offset, packet->length, sfp_header->totalsize);
 
 		//csp_print("%s: %u:%u, fragment %" PRIu32 "/%" PRIu32 "\n",  __func__, packet->id.src, packet->id.sport, sfp_header->offset + packet->length, sfp_header->totalsize);
 
