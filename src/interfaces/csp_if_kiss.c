@@ -1,5 +1,3 @@
-
-
 /**
  * Testing:
  * Use the following linux tool to setup loopback port to test with:
@@ -20,6 +18,11 @@
 #define TFESC    0xDD
 #define TNC_DATA 0x00
 
+/* Tamaño máximo del frame KISS:
+ * CSP_BUFFER_SIZE bytes de datos, cada byte puede escaparse (x2),
+ * más 2 bytes de start (FEND + TNC_DATA) y 1 byte de stop (FEND) */
+#define KISS_TX_BUFFER_SIZE (CSP_BUFFER_SIZE * 2 + 3)
+
 int csp_kiss_tx(csp_iface_t * iface, uint16_t via, csp_packet_t * packet, int from_me) {
 
 	csp_kiss_interface_data_t * ifdata = iface->interface_data;
@@ -34,27 +37,36 @@ int csp_kiss_tx(csp_iface_t * iface, uint16_t via, csp_packet_t * packet, int fr
 	/* Save the outgoing id in the buffer */
 	csp_id_prepend(packet);
 
-	/* Transmit data */
-	const unsigned char start[] = {FEND, TNC_DATA};
-	const unsigned char esc_end[] = {FESC, TFEND};
-	const unsigned char esc_esc[] = {FESC, TFESC};
+	/* Acumular frame KISS completo en buffer local para enviarlo
+	 * en una sola llamada a tx_func en lugar de byte a byte.
+	 * Esto reduce drásticamente el tiempo con el mutex tomado,
+	 * evitando bloquear la recepción de ACKs durante el TX. */
+	uint8_t tx_buf[KISS_TX_BUFFER_SIZE];
+	size_t tx_len = 0;
+
+	/* Start: FEND + TNC_DATA */
+	tx_buf[tx_len++] = FEND;
+	tx_buf[tx_len++] = TNC_DATA;
+
+	/* Datos con escape KISS */
 	const unsigned char * data = packet->frame_begin;
-
-	ifdata->tx_func(driver, start, sizeof(start));
-
 	for (unsigned int i = 0; i < packet->frame_length; i++, ++data) {
 		if (*data == FEND) {
-			ifdata->tx_func(driver, esc_end, sizeof(esc_end));
-			continue;
+			tx_buf[tx_len++] = FESC;
+			tx_buf[tx_len++] = TFEND;
+		} else if (*data == FESC) {
+			tx_buf[tx_len++] = FESC;
+			tx_buf[tx_len++] = TFESC;
+		} else {
+			tx_buf[tx_len++] = *data;
 		}
-		if (*data == FESC) {
-			ifdata->tx_func(driver, esc_esc, sizeof(esc_esc));
-			continue;
-		}
-		ifdata->tx_func(driver, data, 1);
 	}
-	const unsigned char stop[] = {FEND};
-	ifdata->tx_func(driver, stop, sizeof(stop));
+
+	/* Stop: FEND */
+	tx_buf[tx_len++] = FEND;
+
+	/* Enviar todo en una sola llamada */
+	ifdata->tx_func(driver, tx_buf, tx_len);
 
 	/* Unlock */
 	csp_usart_unlock(driver);

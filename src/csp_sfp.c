@@ -85,7 +85,7 @@ int csp_sfp_send_own_memcpy(csp_conn_t * conn, const void * data, unsigned int t
 
 		csp_print("SFP SEND fragment: offset=%u size=%u total=%u\n", count, size, totalsize);
 		csp_send(conn, packet);
-		usleep(10000);
+		usleep(60000);
 		csp_print("SFP SEND done: offset=%u\n", count);
 
 		/* Increment count */

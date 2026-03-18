@@ -15,9 +15,9 @@
 #include "csp_posix_helper.h"
 
 #define SERVER_PORT     10
-#define TEST_MSG_SIZE   2048
+#define TEST_MSG_SIZE   1048576
 #define DEFAULT_MTU     128
-#define MAX_CONT			10
+#define MAX_CONT        10
 
 static uint8_t server_address = 10;
 static uint8_t client_address = 20;
@@ -48,12 +48,16 @@ static struct option long_options[] = {
     {0, 0, 0, 0}
 };
 
+extern void csp_rdp_set_opt(unsigned int window_size, unsigned int conn_timeout_ms,
+                             unsigned int packet_timeout_ms, unsigned int delayed_acks,
+                             unsigned int ack_timeout, unsigned int ack_delay_count);
+
 static void print_help(void) {
     csp_print("Usage: csp_sfp_client [options]\n");
     csp_print(" -k <kiss-device>  set KISS device\n");
     csp_print(" -a <address>      set interface address\n");
     csp_print(" -C <address>      connect to server at address\n");
-    csp_print(" -m <mtu>          set SFP mtu\n");
+    csp_print(" -m <mtu>          set SFP MTU\n");
     csp_print(" -h                print help\n");
 }
 
@@ -137,6 +141,32 @@ int main(int argc, char *argv[]) {
 
     srand(time(NULL));
 
+    /* Debug RDP activo para diagnostico */
+    csp_dbg_rdp_print = 2;
+
+    /*
+     * delayed_acks=0: ACK inmediato al recibir cada dato.
+     *
+     * El ACK diferido (delayed_acks=1) no funciona porque el router task
+     * solo llama csp_rdp_check_timeouts cuando llega un paquete — no hay
+     * timer independiente. El ACK diferido a 300ms termina disparando justo
+     * cuando el cliente retransmite (packet_timeout), causando colision en
+     * el canal half-duplex.
+     *
+     * Con delayed_acks=0, el ACK se envia inmediatamente al recibir datos.
+     * El primer ACK puede perderse si el TNC del cliente aun esta liberando
+     * PTT (~200ms), pero el guard rcv_cur==rcv_lsa en csp_rdp_should_ack
+     * impide el ACK storm. Con packet_timeout=5000ms el cliente espera 5s
+     * antes de retransmitir, dando tiempo suficiente para que el ACK llegue
+     * en el segundo intento (cuando el canal ya esta libre).
+     */
+    csp_rdp_set_opt(1,      /* window_size                                */
+                    10000,  /* conn_timeout_ms                            */
+                    5000,   /* packet_timeout_ms  (5s antes de retransmit)*/
+                    0,      /* delayed_acks = DESACTIVADO                 */
+                    2000,   /* ack_timeout_ms (no usado con delayed=0)    */
+                    1);     /* ack_delay_count (no usado con delayed=0)   */
+
     csp_init();
     router_start();
 
@@ -159,28 +189,26 @@ int main(int argc, char *argv[]) {
     csp_print("Server address: %u\n", server_address);
     csp_print("Server port: %u\n", SERVER_PORT);
 
-	int flag = 0;
+    int flag = 0;
     csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, server_address, SERVER_PORT, 3000, CSP_O_RDP);
-    
-    while(conn == NULL) {
-        //csp_print("Connection failed\n");
-        csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, server_address, SERVER_PORT, 3000, CSP_O_RDP);
-        
-        if (flag == MAX_CONT){
-        		csp_print("Connection failed\n");
-    			free(msg);
-    			return EXIT_FAILURE;
+
+    while (conn == NULL) {
+        /* FIX Bug-8: esperar antes de reintentar para reducir zombies */
+        sleep(2);
+        conn = csp_connect(CSP_PRIO_NORM, server_address, SERVER_PORT, 3000, CSP_O_RDP);
+        if (flag == MAX_CONT) {
+            csp_print("Connection failed after %d attempts\n", MAX_CONT);
+            free(msg);
+            return EXIT_FAILURE;
         }
-        flag = flag + 1;
+        flag++;
     }
-	
+
     csp_print("Connection established\n");
     csp_print("Calling csp_sfp_send()...\n");
-	usleep(100000);
-	
+
     int err = csp_sfp_send(conn, msg, (unsigned int) msg_size, mtu, 480000);
 
-    usleep(100000);
     csp_close(conn);
     free(msg);
 
@@ -190,11 +218,11 @@ int main(int argc, char *argv[]) {
     if (err == CSP_ERR_NONE) {
         csp_print("\nSFP transfer OK\n");
         csp_print("Bytes: %zu\n", msg_size);
-        csp_print("Time: %.3f s\n", elapsed);
+        csp_print("Time:  %.3f s\n", elapsed);
         return EXIT_SUCCESS;
     } else {
         csp_print("\nSFP transfer failed: %d\n", err);
-        csp_print("Time: %.3f s\n", elapsed);
+        csp_print("Time:  %.3f s\n", elapsed);
         return EXIT_FAILURE;
     }
 }

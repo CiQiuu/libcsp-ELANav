@@ -48,11 +48,6 @@ typedef struct __packed {
 
 static int csp_rdp_close_internal(csp_conn_t * conn, uint8_t closed_by, bool send_rst);
 
-/**
- * RDP Headers:
- * The following functions are helper functions that handles the extra RDP
- * information that needs to be appended to all data packets.
- */
 static rdp_header_t * csp_rdp_header_add(csp_packet_t * packet) {
 	rdp_header_t * header;
 	if ((packet->length + sizeof(*header)) > sizeof(packet->data)) {
@@ -75,46 +70,28 @@ static rdp_header_t * csp_rdp_header_ref(csp_packet_t * packet) {
 	return header;
 }
 
-/* Functions for comparing wrapping sequence numbers and timestamps */
-
-/* Return 1 if seq is between start and end (both inclusive) */
 static inline int csp_rdp_seq_between(uint16_t seq, uint16_t start, uint16_t end) {
 	return (uint16_t)(end - start) >= (uint16_t)(seq - start);
 }
 
-/* Return 1 if seq is before cmp */
 static inline int csp_rdp_seq_before(uint16_t seq, uint16_t cmp) {
 	return (int16_t)(seq - cmp) < 0;
 }
 
-/* Return 1 if seq is after cmp */
 static inline int csp_rdp_seq_after(uint16_t seq, uint16_t cmp) {
 	return csp_rdp_seq_before(cmp, seq);
 }
 
-/* Return 1 if time is between start and end (both inclusive) */
-// static inline int csp_rdp_time_between(uint32_t time, uint32_t start, uint32_t end) {
-//	return (uint32_t)(end - start) >= (uint32_t)(time - start);
-// }
-
-/* Return 1 if time is before cmp */
 static inline int csp_rdp_time_before(uint32_t time, uint32_t cmp) {
 	return (int32_t)(time - cmp) < 0;
 }
 
-/* Return 1 if time is after cmp */
 static inline int csp_rdp_time_after(uint32_t time, uint32_t cmp) {
 	return csp_rdp_time_before(cmp, time);
 }
 
-/**
- * CONTROL MESSAGES
- * The following function is used to send empty messages,
- * with ACK, SYN or RST flag.
- */
 static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags, int seq_nr, int ack_nr) {
 
-	/* Generate message */
 	if (!packet) {
 		packet = csp_buffer_get(0);
 		if (!packet)
@@ -126,11 +103,8 @@ static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags,
 		conn->rdp.rcv_lsa = ack_nr;
 	}
 
-	/* Every outgoing message contains the last valid ACK number. So we always set last ack timetamp
-	 * We do this early to minimize race condition between read() call and router task csp_rdp_new_packet() */
 	conn->rdp.ack_timestamp = csp_get_ms();
 
-	/* Add RDP header */
 	rdp_header_t * header = csp_rdp_header_add(packet);
 	if (header == NULL) {
 		csp_rdp_error("RDP %p: No space for RDP header (cmp)", (void *)conn);
@@ -140,12 +114,9 @@ static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags,
 	header->seq_nr = htobe16(seq_nr);
 	header->ack_nr = htobe16(ack_nr);
 
-	/* Add a bit of ephemeral data to avoid CMP's to be deduplicated */
 	static uint8_t csp_rdp_incr = 0;
-	//header->flags = flags;
 	header->flags |= csp_rdp_incr++ << 4 | flags;
 
-	/* Send copy to tx_queue, before sending packet to IF */
 	if (flags & RDP_SYN) {
 		csp_packet_t * rdp_packet = csp_buffer_clone(packet);
 		if (rdp_packet == NULL) return CSP_ERR_NOMEM;
@@ -153,7 +124,6 @@ static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags,
 		csp_rdp_queue_tx_add(conn, rdp_packet);
 	}
 
-	/* Send control messages with high priority */
 	csp_id_t idout = conn->idout;
 	idout.pri = conn->idout.pri < CSP_PRIO_HIGH ? conn->idout.pri : CSP_PRIO_HIGH;
 
@@ -164,24 +134,16 @@ static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags,
 					 be16toh(header->seq_nr), be16toh(header->ack_nr),
 					 packet->length, (unsigned int)(packet->length - sizeof(rdp_header_t)));
 
-	/* Send packet to IF */
 	csp_send_direct(&idout, packet, NULL);
-
 
 	return CSP_ERR_NONE;
 }
 
-/**
- * SYN Packet
- * The following function sends a SYN packet
- */
 static int csp_rdp_send_syn(csp_conn_t * conn) {
 
-	/* Allocate message */
 	csp_packet_t * packet = csp_buffer_get(0);
 	if (packet == NULL) return CSP_ERR_NOMEM;
 
-	/* Generate contents */
 	packet->data32[0] = htobe32(csp_rdp_window_size);
 	packet->data32[1] = htobe32(csp_rdp_conn_timeout);
 	packet->data32[2] = htobe32(csp_rdp_packet_timeout);
@@ -195,10 +157,8 @@ static int csp_rdp_send_syn(csp_conn_t * conn) {
 
 static inline int csp_rdp_receive_data(csp_conn_t * conn, csp_packet_t * packet) {
 
-	/* Remove RDP header before passing to userspace */
 	csp_rdp_header_remove(packet);
 
-	/* Enqueue data */
 	if (csp_conn_enqueue_packet(conn, packet) != CSP_ERR_NONE) {
 		csp_dbg_conn_ovf++;
 		csp_rdp_error("RDP %p: Conn RX buffer full\n", (void *)conn);
@@ -210,7 +170,6 @@ static inline int csp_rdp_receive_data(csp_conn_t * conn, csp_packet_t * packet)
 
 static inline void csp_rdp_rx_queue_flush(csp_conn_t * conn) {
 
-	/* Loop through RX queue */
 	int i, count;
 	csp_packet_t * packet;
 
@@ -218,9 +177,6 @@ front:
 	count = csp_rdp_queue_rx_size();
 	for (i = 0; i < count; i++) {
 
-		/* Check there is room in the RX queue:
-		 * We don't hold a lock on the queue, so we require at least two spaces to be free
-		 * to hopefully avoid posting packets on a full queue */
 		if (csp_queue_free(conn->rx_queue) <= 2)
 			return;
 
@@ -231,7 +187,6 @@ front:
 
 		rdp_header_t * header = csp_rdp_header_ref(packet);
 
-		/* If the matching packet was found: */
 		if (header->seq_nr == (uint16_t)(conn->rdp.rcv_cur + 1)) {
 			csp_rdp_protocol("RDP %p: Deliver seq %u\n", (void *)conn, header->seq_nr);
 			if (csp_rdp_receive_data(conn, packet) != CSP_ERR_NONE) {
@@ -239,11 +194,7 @@ front:
 				csp_buffer_free(packet);
 			}
 			conn->rdp.rcv_cur++;
-
-			/* Loop from first element again */
 			goto front;
-
-			/* Otherwise, requeue */
 		} else {
 			csp_rdp_queue_rx_add(conn, packet);
 		}
@@ -252,7 +203,6 @@ front:
 
 static inline bool csp_rdp_seq_in_rx_queue(csp_conn_t * conn, uint16_t seq_nr) {
 
-	/* Loop through RX queue */
 	int i, count;
 	csp_packet_t * packet;
 	count = csp_rdp_queue_rx_size();
@@ -288,17 +238,36 @@ static inline int csp_rdp_rx_queue_add(csp_conn_t * conn, csp_packet_t * packet,
 
 static inline bool csp_rdp_should_ack(csp_conn_t * conn) {
 
-	/* If delayed ACKs are not used, always ACK */
+	/*
+	 * FIX gratuitous ACK storm:
+	 *
+	 * Do not send an ACK when rcv_cur == rcv_lsa — there is nothing new
+	 * to acknowledge. Without this guard, the periodic csp_rdp_check_ack
+	 * call from csp_rdp_check_timeouts fires every N ms even when the
+	 * receiver has no new data, flooding the half-duplex RF channel.
+	 *
+	 * This guard works correctly with both delayed_acks=0 and =1:
+	 *   - After an ACK is sent via csp_rdp_send_cmp, rcv_lsa is updated
+	 *     to rcv_cur, so subsequent periodic calls return false until
+	 *     new data arrives.
+	 *   - For duplicates, the ACK is sent directly via csp_rdp_send_cmp
+	 *     (bypassing this function), so duplicates always get a re-ACK.
+	 */
+	if (conn->rdp.rcv_cur == conn->rdp.rcv_lsa) {
+		return false;
+	}
+
+	/* If delayed ACKs are not used, send immediately */
 	if (!conn->rdp.delayed_acks) {
 		return true;
 	}
 
-	/* ACK if time since last ACK is greater than ACK timeout */
+	/* Delayed ACK: wait ack_timeout ms since last data reception */
 	uint32_t time_now = csp_get_ms();
 	if (csp_rdp_time_after(time_now, conn->rdp.ack_timestamp + conn->rdp.ack_timeout))
 		return true;
 
-	/* ACK if number of unacknowledged packets is greater than delay count */
+	/* ACK if unacknowledged count exceeds delay count */
 	if (csp_rdp_seq_after(conn->rdp.rcv_cur, conn->rdp.rcv_lsa + conn->rdp.ack_delay_count))
 		return true;
 
@@ -307,12 +276,10 @@ static inline bool csp_rdp_should_ack(csp_conn_t * conn) {
 
 int csp_rdp_check_ack(csp_conn_t * conn) {
 
-	/* Check RX queue for spare capacity */
 	if (CSP_CONN_RXQUEUE_LEN - csp_queue_size(conn->rx_queue) <= 2 * (int32_t)conn->rdp.window_size) {
 		return CSP_ERR_NONE;
 	}
 
-	/* If more space available, only send after ack timeout or immediately if delay_acks is zero */
 	if (csp_rdp_should_ack(conn)) {
 		csp_rdp_send_cmp(conn, NULL, RDP_ACK, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
 	}
@@ -321,27 +288,16 @@ int csp_rdp_check_ack(csp_conn_t * conn) {
 }
 
 static inline bool csp_rdp_is_conn_ready_for_tx(csp_conn_t * conn) {
-	// Check Tx window (messages waiting for acks)
 	if (csp_rdp_seq_after(conn->rdp.snd_nxt, conn->rdp.snd_una + conn->rdp.window_size - 1)) {
 		return false;
 	}
 	return true;
 }
 
-/**
- * This function must be called with regular intervals for the
- * RDP protocol to work as expected. This takes care of closing
- * stale connections and retransmitting traffic. A good place to
- * call this function is from the CSP router task.
- */
 void csp_rdp_check_timeouts(csp_conn_t * conn) {
 
 	const uint32_t time_now = csp_get_ms();
 
-	/**
-	 * CONNECTION TIMEOUT:
-	 * Check that connection has not timed out inside the network stack
-	 */
 	if (conn->dest_socket != NULL) {
 		if (csp_rdp_time_after(time_now, conn->timestamp + conn->rdp.conn_timeout)) {
 			csp_rdp_error("RDP %p: Found a lost connection (now: %" PRIu32 ", ts: %" PRIu32 ", to: %" PRIu32 "), closing\n",
@@ -351,10 +307,6 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 		}
 	}
 
-	/**
-	 * CLOSE-WAIT TIMEOUT:
-	 * After waiting a while in CLOSE-WAIT, the connection should be closed.
-	 */
 	if (conn->rdp.state == RDP_CLOSE_WAIT) {
 		if (csp_rdp_time_after(time_now, conn->timestamp + conn->rdp.conn_timeout)) {
 			csp_conn_close(conn, CSP_RDP_CLOSED_BY_PROTOCOL | CSP_RDP_CLOSED_BY_TIMEOUT);
@@ -362,10 +314,6 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 		}
 	}
 
-	/**
-	 * MESSAGE TIMEOUT:
-	 * Check each outgoing message for TX timeout
-	 */
 	int count = csp_rdp_queue_tx_size();
 	for (int i = 0; i < count; i++) {
 
@@ -375,10 +323,8 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 			break;
 		}
 
-		/* Get header */
 		rdp_header_t * header = csp_rdp_header_ref((csp_packet_t *)packet);
 
-		/* If acked, do not retransmit */
 		if (csp_rdp_seq_before(be16toh(header->seq_nr), conn->rdp.snd_una)) {
 			csp_rdp_protocol("RDP %p: TX Element Free, time %" PRIu32 ", seq %u, una %u\n",
 							 (void *)conn, packet->timestamp_tx, be16toh(header->seq_nr), conn->rdp.snd_una);
@@ -386,19 +332,14 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 			continue;
 		}
 
-		/* Check timestamp and retransmit if needed */
 		if (csp_rdp_time_after(time_now, packet->timestamp_tx + conn->rdp.packet_timeout)) {
 			csp_packet_t * new_packet = csp_buffer_get(0);
 			if (new_packet) {
 				csp_rdp_protocol("RDP %p: TX Element timed out, retransmitting seq %u\n",
 								 (void *)conn, be16toh(header->seq_nr));
 
-				/* Update to latest outgoing ACK */
 				header->ack_nr = htobe16(conn->rdp.rcv_cur);
-
-				/* Every outgoing message contains the last valid ACK number. So we always set last ack timetamp */
 				conn->rdp.ack_timestamp = csp_get_ms();
-				/* Send copy to tx_queue */
 				packet->timestamp_tx = csp_get_ms();
 				csp_buffer_copy(packet, new_packet);
 				csp_send_direct(&conn->idout, new_packet, NULL);
@@ -407,21 +348,21 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 			}
 		}
 
-		/* Requeue the TX element */
 		csp_rdp_queue_tx_add(conn, packet);
 
 	}
 
 	if (conn->rdp.state == RDP_OPEN) {
 
-		/* Check if we have unacknowledged segments */
-		if (conn->rdp.delayed_acks) {
-			csp_rdp_check_ack(conn);
-		}
+		/*
+		 * Periodic ACK check. csp_rdp_should_ack prevents sending when
+		 * rcv_cur == rcv_lsa (nothing new to acknowledge).
+		 * With delayed_acks=0 this fires whenever new data is pending.
+		 * With delayed_acks=1 this fires after ack_timeout ms.
+		 */
+		csp_rdp_check_ack(conn);
 
-		/* Wake user task if additional Tx can be done */
 		if (csp_rdp_is_conn_ready_for_tx(conn)) {
-			//csp_rdp_protocol("RDP %p: Wake Tx task (check timeouts)\n", (void *)conn);
 			csp_bin_sem_post(&conn->rdp.tx_wait);
 		}
 	}
@@ -434,7 +375,6 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 
 	bool close_connection = false;
 
-	/* Get RX header and convert to host byte-order */
 	rdp_header_t * rx_header = csp_rdp_header_ref(packet);
 	rx_header->ack_nr = be16toh(rx_header->ack_nr);
 	rx_header->seq_nr = be16toh(rx_header->seq_nr);
@@ -450,11 +390,9 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 		rx_header->seq_nr, rx_header->ack_nr,
 		packet->length, (unsigned int)(packet->length - sizeof(rdp_header_t)));
 
-	/* If a RESET was received. */
 	if (rx_header->flags & RDP_RST) {
 
 		if (rx_header->flags & RDP_ACK) {
-			/* Store current ack'ed sequence number */
 			conn->rdp.snd_una = rx_header->ack_nr + 1;
 		}
 
@@ -468,7 +406,6 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 			csp_rdp_protocol("RDP %p: RST received in CLOSE_WAIT, ack: %d - closing\n",
 							 (void *)conn, (rx_header->flags & RDP_ACK));
 			if ((rx_header->flags & RDP_ACK) && CSP_USE_RDP_FAST_CLOSE) {
-				// skip timeout - the other end has acknowledged the RST
 				closed_by |= CSP_RDP_CLOSED_BY_TIMEOUT;
 			}
 			goto discard_close;
@@ -489,19 +426,12 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 		goto discard_open;
 	}
 
-	/* The BIG FAT switch (state-machine) */
 	switch (conn->rdp.state) {
 
-		/**
-		 * STATE == CLOSED
-		 */
 		case RDP_CLOSED: {
 
-			/* Clear ephemeral data added by csp_rdp_send_cmp(). 
-			   RDP flags are located in the lower 4 bits. */
 			uint8_t rx_header_flags = rx_header->flags & 0x0f;
 
-			/* No SYN flag set while in closed. Inform by sending back RST */
 			if (rx_header_flags != RDP_SYN) {
 				csp_rdp_protocol("RDP %p: Not SYN received in CLOSED state. Discarding packet\n", (void *)conn);
 				csp_rdp_send_cmp(conn, NULL, RDP_RST, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
@@ -510,18 +440,15 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 
 			csp_rdp_protocol("RDP %p: SYN-Received\n", (void *)conn);
 
-			/* Setup TX seq. */
 			unsigned int seed = csp_get_ms();
 			conn->rdp.snd_iss = (uint16_t)rand_r(&seed);
 			conn->rdp.snd_nxt = conn->rdp.snd_iss + 1;
 			conn->rdp.snd_una = conn->rdp.snd_iss;
 
-			/* Store RX seq. */
 			conn->rdp.rcv_cur = rx_header->seq_nr;
 			conn->rdp.rcv_irs = rx_header->seq_nr;
 			conn->rdp.rcv_lsa = rx_header->seq_nr;
 
-			/* Store RDP options */
 			conn->rdp.window_size = be32toh(packet->data32[0]);
 			conn->rdp.conn_timeout = be32toh(packet->data32[1]);
 			conn->rdp.packet_timeout = be32toh(packet->data32[2]);
@@ -532,48 +459,35 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 							 (void *)conn, conn->rdp.window_size, conn->rdp.conn_timeout, conn->rdp.packet_timeout,
 							 conn->rdp.delayed_acks, conn->rdp.ack_timeout, conn->rdp.ack_delay_count);
 
-			/* Connection accepted */
 			conn->rdp.state = RDP_SYN_RCVD;
 
-			/* Send SYN/ACK */
 			csp_rdp_send_cmp(conn, NULL, RDP_ACK | RDP_SYN, conn->rdp.snd_iss, conn->rdp.rcv_irs);
 
 			goto discard_open;
 
 		} break;
 
-		/**
-		 * STATE == SYN-SENT
-		 */
 		case RDP_SYN_SENT: {
 
-			/* First check SYN/ACK */
 			if ((rx_header->flags & RDP_SYN) && (rx_header->flags & RDP_ACK)) {
 
 				conn->rdp.rcv_cur = rx_header->seq_nr;
 				conn->rdp.rcv_irs = rx_header->seq_nr;
-				conn->rdp.rcv_lsa = rx_header->seq_nr - 1;
+				conn->rdp.rcv_lsa = rx_header->seq_nr;  /* equal to rcv_cur: nothing pending ACK */
 				conn->rdp.snd_una = rx_header->ack_nr + 1;
 				conn->rdp.ack_timestamp = csp_get_ms();
 				conn->rdp.state = RDP_OPEN;
 
 				csp_rdp_protocol("RDP %p: NP: Connection OPEN\n", (void *)conn);
 
-				/* Send ACK */
 				csp_rdp_send_cmp(conn, NULL, RDP_ACK, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
 
-				/* Wake TX task */
 				csp_rdp_protocol("RDP %p: Wake Tx task (ack)\n", (void *)conn);
 				csp_bin_sem_post(&conn->rdp.tx_wait);
 
 				goto discard_open;
 			}
 
-			/* If there was no SYN in the reply, our SYN message hit an already open connection
-			 * This is handled by sending a RST.
-			 * Normally this would be followed up by a new connection attempt, however
-			 * we don't have a method for signaling this to the user space.
-			 */
 			if ((rx_header->flags & RDP_ACK)) {
 				csp_rdp_error("RDP %p: Half-open connection found, send RST and wake Tx task\n", (void *)conn);
 				csp_rdp_send_cmp(conn, NULL, RDP_RST, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
@@ -582,24 +496,27 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 				goto discard_open;
 			}
 
-			/* Otherwise we have an invalid command, such as a SYN reply to a SYN command,
-			 * indicating simultaneous connections, which is not possible in the way CSP
-			 * reserves some ports for server and some for clients.
-			 */
 			csp_rdp_error("RDP %p: Invalid reply to SYN request\n", (void *)conn);
 			goto discard_close;
 
 		} break;
 
-		/**
-		 * STATE == OPEN
-		 */
 		case RDP_SYN_RCVD:
 		case RDP_OPEN: {
 
 			/* SYN or !ACK is invalid */
 			if ((rx_header->flags & RDP_SYN) || !(rx_header->flags & RDP_ACK)) {
 				if (rx_header->seq_nr != conn->rdp.rcv_irs) {
+					if (conn->rdp.state == RDP_OPEN) {
+						/*
+						 * FIX Bug-8: SYN zombie from a previous failed connection.
+						 * In OPEN state, drop silently — do not reset the active
+						 * connection.
+						 */
+						csp_rdp_protocol("RDP %p: Stale SYN in OPEN state (seq=%u), dropping zombie\n",
+										 (void *)conn, rx_header->seq_nr);
+						goto discard_open;
+					}
 					csp_rdp_error("RDP %p: Invalid SYN or no ACK, resetting!\n", (void *)conn);
 					goto discard_close;
 				} else {
@@ -612,9 +529,27 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 			if (!csp_rdp_seq_between(rx_header->seq_nr, conn->rdp.rcv_cur + 1, conn->rdp.rcv_cur + (conn->rdp.window_size * 2))) {
 				csp_rdp_protocol("RDP %p: Invalid sequence number! %u not between %u and %" PRIu32"\n",
 								 (void *)conn, rx_header->seq_nr, conn->rdp.rcv_cur + 1U, conn->rdp.rcv_cur + (conn->rdp.window_size * 2U));
-				/* If duplicate SYN received, send another SYN/ACK */
-				if (conn->rdp.state == RDP_SYN_RCVD)
+
+				if (conn->rdp.state == RDP_SYN_RCVD) {
 					csp_rdp_send_cmp(conn, NULL, RDP_ACK | RDP_SYN, conn->rdp.snd_iss, conn->rdp.rcv_irs);
+
+				} else if (conn->rdp.state == RDP_OPEN &&
+				           csp_rdp_seq_before(rx_header->seq_nr, conn->rdp.rcv_cur + 1)) {
+					/*
+					 * FIX Bug-A: duplicate data packet — already processed.
+					 *
+					 * Send ACK immediately via csp_rdp_send_cmp, bypassing
+					 * csp_rdp_should_ack. The sender just finished transmitting
+					 * this retransmission, so its TNC is now releasing PTT.
+					 * Our immediate ACK is sent within a few ms and travels
+					 * over RF while the sender's TNC completes PTT release.
+					 * By the time our ACK frame ends (~40ms at 9600 baud),
+					 * the sender's TNC is in RX mode and can receive it.
+					 */
+					csp_rdp_protocol("RDP %p: Duplicate data seq %u, re-ACKing (seq %u)\n",
+									 (void *)conn, rx_header->seq_nr, conn->rdp.rcv_cur);
+					csp_rdp_send_cmp(conn, NULL, RDP_ACK, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
+				}
 				goto discard_open;
 			}
 
@@ -634,43 +569,31 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 				csp_rdp_protocol("RDP %p: NC: Connection OPEN\n", (void *)conn);
 				conn->rdp.state = RDP_OPEN;
 
-				/* If a socket is set, this message is the first in a new connection
-				 * so the connection must be queued to the socket. */
 				if (conn->dest_socket != NULL) {
 
-					/* Try queueing */
 					if (csp_queue_enqueue(conn->dest_socket->rx_queue, &conn, 0) == CSP_QUEUE_ERROR) {
 						csp_rdp_error("RDP %p: ERROR socket cannot accept more connections\n", (void *)conn);
 						goto discard_close;
 					}
 
-					/* Ensure that this connection will not be posted to this socket again
-					 * and remember that the connection handle has been passed to userspace
-					 * by setting the socket = NULL */
 					conn->dest_socket = NULL;
 				}
 			}
 
 			if (conn->dest_socket == NULL) {
-				/* User space has taken control of the connection, so RDP needs to "monitor"
-				 * the connection by timestamping each time a packet is received in OPEN state */
 				conn->timestamp = csp_get_ms();
 			}
 
-			/* Store current ack'ed sequence number */
 			conn->rdp.snd_una = rx_header->ack_nr + 1;
 
-			/* We have an EACK */
 			if ((rx_header->flags & RDP_EAK)) {
 				csp_rdp_protocol("RDP %p: Got EACK\n", (void *)conn);
 				goto discard_open;
 			}
 
-			/* If no data, return here */
 			if (packet->length <= sizeof(rdp_header_t))
 				goto discard_open;
 
-			/* If message is not in sequence, send EACK and store packet */
 			if (rx_header->seq_nr != (uint16_t)(conn->rdp.rcv_cur + 1)) {
 				if (csp_rdp_rx_queue_add(conn, packet, rx_header->seq_nr) != CSP_ERR_NONE) {
 					csp_rdp_check_ack(conn);
@@ -679,22 +602,23 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 				goto accepted_open;
 			}
 
-			/* Store sequence number before stripping RDP header */
 			uint16_t seq_nr = rx_header->seq_nr;
 
-			/* Receive data */
 			if (csp_rdp_receive_data(conn, packet) != CSP_ERR_NONE)
 				goto discard_open;
 
-			/* Update last received packet */
 			conn->rdp.rcv_cur = seq_nr;
 
-			/* Only ACK the message if there is room for a full window in the RX buffer.
-			 * Unacknowledged segments are ACKed by csp_rdp_check_timeouts when the buffer is
-			 * no longer full. */
+			/*
+			 * Reset ack_timestamp to now so the delay timer (when
+			 * delayed_acks=1) measures from this reception event.
+			 * With delayed_acks=0, csp_rdp_should_ack will return true
+			 * immediately (rcv_cur > rcv_lsa, no delay needed).
+			 */
+			conn->rdp.ack_timestamp = csp_get_ms();
+
 			csp_rdp_check_ack(conn);
 
-			/* Flush RX queue */
 			csp_rdp_rx_queue_flush(conn);
 
 			goto accepted_open;
@@ -703,23 +627,19 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 
 		case RDP_CLOSE_WAIT:
 
-			/* Ignore SYN or !ACK */
 			if ((rx_header->flags & RDP_SYN) || !(rx_header->flags & RDP_ACK)) {
 				csp_rdp_protocol("RDP %p: Invalid SYN or no ACK in CLOSE-WAIT\n", (void *)conn);
 				goto discard_open;
 			}
 
-			/* Check ACK number */
 			if (!csp_rdp_seq_between(rx_header->ack_nr, conn->rdp.snd_una - 1 - (conn->rdp.window_size * 2), conn->rdp.snd_nxt - 1)) {
 				csp_rdp_error("RDP %p: Invalid ACK number! %u not between %" PRIu32 " and %u\n",
 							  (void *)conn, rx_header->ack_nr, conn->rdp.snd_una - 1 - (conn->rdp.window_size * 2), conn->rdp.snd_nxt - 1);
 				goto discard_open;
 			}
 
-			/* Store current ack'ed sequence number */
 			conn->rdp.snd_una = rx_header->ack_nr + 1;
 
-			/* Send back a reset */
 			csp_rdp_send_cmp(conn, NULL, RDP_ACK | RDP_RST, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
 
 			goto discard_open;
@@ -730,13 +650,10 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 	}
 
 discard_close:
-	/* If user-space has received the connection handle, wake it up,
-	 * by sending a NULL pointer, user-space must close connection */
 	if (conn->dest_socket == NULL) {
 		csp_conn_close(conn, closed_by);
 		csp_conn_enqueue_packet(conn, NULL);
 	} else {
-		/* New connection, userspace doesn't know anything about it yet - so it can be completely closed */
 		csp_conn_close(conn, closed_by | CSP_RDP_CLOSED_BY_USERSPACE);
 	}
 
@@ -766,7 +683,6 @@ retry:
 		return CSP_ERR_ALREADY;
 	}
 
-	/* Randomize ISS */
 	unsigned int seed = csp_get_ms();
 	conn->rdp.snd_iss = (uint16_t)rand_r(&seed);
 	conn->rdp.snd_nxt = conn->rdp.snd_iss + 1;
@@ -774,15 +690,12 @@ retry:
 
 	csp_rdp_protocol("RDP %p: AC: Sending SYN\n", (void *)conn);
 
-	/* Ensure semaphore is busy, so router task can release it */
 	csp_bin_sem_wait(&conn->rdp.tx_wait, 0);
 
-	/* Send SYN message */
 	conn->rdp.state = RDP_SYN_SENT;
 	if (csp_rdp_send_syn(conn) != CSP_ERR_NONE)
 		goto error;
 
-	/* Wait for router task to release semaphore */
 	csp_rdp_protocol("RDP %p: AC: Waiting for SYN/ACK reply...\n", (void *)conn);
 	int result = csp_bin_sem_wait(&conn->rdp.tx_wait, conn->rdp.conn_timeout);
 
@@ -816,7 +729,6 @@ int csp_rdp_send(csp_conn_t * conn, csp_packet_t * packet) {
 		return CSP_ERR_RESET;
 	}
 
-	/* Wait here for RDP to become ready or the connection to be closed */
 	while (1) {
 		if (conn->rdp.state == RDP_CLOSE_WAIT || conn->rdp.state == RDP_CLOSED) {
 			csp_rdp_error("RDP %p: ERROR cannot send, connection closed by peer or timeout\n", (void *)conn);
@@ -828,7 +740,6 @@ int csp_rdp_send(csp_conn_t * conn, csp_packet_t * packet) {
 		csp_bin_sem_wait(&conn->rdp.tx_wait, conn->rdp.conn_timeout);
 	}
 
-	/* Add RDP header */
 	rdp_header_t * tx_header = csp_rdp_header_add(packet);
 	if (tx_header == NULL) {
 		csp_rdp_error("RDP %p: No space for RDP header (send)\n", (void *)conn);
@@ -838,7 +749,6 @@ int csp_rdp_send(csp_conn_t * conn, csp_packet_t * packet) {
 	tx_header->seq_nr = htobe16(conn->rdp.snd_nxt);
 	tx_header->flags |= RDP_ACK;
 
-	/* Send copy to tx_queue */
 	csp_packet_t * rdp_packet = csp_buffer_clone(packet);
 	if (rdp_packet == NULL) {
 		csp_rdp_error("RDP %p: Failed to allocate packet buffer\n", (void *)conn);
@@ -864,21 +774,15 @@ int csp_rdp_send(csp_conn_t * conn, csp_packet_t * packet) {
 
 void csp_rdp_init(csp_conn_t * conn) {
 
-	/* Set initial state */
 	conn->rdp.state = RDP_CLOSED;
 	conn->rdp.closed_by = 0;
 	conn->rdp.conn_timeout = csp_rdp_conn_timeout;
 	conn->rdp.packet_timeout = csp_rdp_packet_timeout;
 
-	/* Create a binary semaphore to wait on for tasks */
 	csp_bin_sem_init(&conn->rdp.tx_wait);
 
 }
 
-/**
- * @note This function may only be called from csp_close, and is therefore
- * without any checks for null pointers.
- */
 int csp_rdp_close(csp_conn_t * conn, uint8_t closed_by) {
 	return csp_rdp_close_internal(conn, closed_by, true);
 }
@@ -891,7 +795,6 @@ static int csp_rdp_close_internal(csp_conn_t * conn, uint8_t closed_by, bool sen
 
 	conn->rdp.closed_by |= closed_by;
 
-	/* If connection is open, send reset */
 	if (conn->rdp.state != RDP_CLOSE_WAIT) {
 		conn->rdp.state = RDP_CLOSE_WAIT;
 		conn->timestamp = csp_get_ms();
@@ -899,7 +802,12 @@ static int csp_rdp_close_internal(csp_conn_t * conn, uint8_t closed_by, bool sen
 			csp_rdp_send_cmp(conn, NULL, RDP_ACK | RDP_RST, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
 		}
 		csp_rdp_protocol("RDP %p: csp_rdp_close(0x%x)%s -> CLOSE_WAIT\n", (void *)conn, closed_by, send_rst ? ", sent RST" : "");
-		csp_bin_sem_post(&conn->rdp.tx_wait);  // wake up any pendng Tx
+		/* FIX zombie TX: flush TX queue immediately on CLOSE_WAIT transition.
+		 * The TX queue is global — packets from this connection must be
+		 * removed NOW so they don't get retransmitted by future connections
+		 * while this connection waits in CLOSE_WAIT. */
+		csp_rdp_queue_flush(conn);
+		csp_bin_sem_post(&conn->rdp.tx_wait);
 	}
 
 	if (conn->rdp.closed_by != CSP_RDP_CLOSED_BY_ALL) {
@@ -914,15 +822,14 @@ static int csp_rdp_close_internal(csp_conn_t * conn, uint8_t closed_by, bool sen
 	csp_rdp_protocol("RDP %p: csp_rdp_close(0x%x) -> CLOSED\n", (void *)conn, closed_by);
 	conn->rdp.state = RDP_CLOSED;
 	conn->rdp.closed_by = 0;
+	/*
+	 * FIX Bug-B: flush TX queue to prevent zombie retransmissions from this
+	 * connection from appearing in future connections (TX queue is global).
+	 */
+	csp_rdp_queue_flush(conn);
 	return CSP_ERR_NONE;
 }
 
-/**
- * RDP Set socket options
- * Controls important parameters of the RDP protocol.
- * These settings will be applied to all new outgoing connections.
- * The settings are global, so be sure no other task are conflicting with your settings.
- */
 void csp_rdp_set_opt(unsigned int window_size, unsigned int conn_timeout_ms,
 					 unsigned int packet_timeout_ms, unsigned int delayed_acks,
 					 unsigned int ack_timeout, unsigned int ack_delay_count) {
@@ -958,7 +865,6 @@ bool csp_rdp_conn_is_active(csp_conn_t *conn) {
 	bool active = true;
 
 	if (csp_rdp_time_after(time_now, conn->timestamp + conn->rdp.conn_timeout)) {
-		/* The RDP connection has timed out */
 		csp_rdp_error("RDP %p: Timeout no packets received last %u ms\n", (void *)conn, conn->rdp.conn_timeout);
 		active = false;
 	}

@@ -19,10 +19,14 @@
 static uint8_t server_address = 10;
 static struct timespec start_time;
 
+extern void csp_rdp_set_opt(unsigned int window_size, unsigned int conn_timeout_ms,
+                             unsigned int packet_timeout_ms, unsigned int delayed_acks,
+                             unsigned int ack_timeout, unsigned int ack_delay_count);
+
 void * server(void * param) {
     (void)param;
-    csp_print("Server task started\n");
 
+    csp_print("Server task started\n");
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     csp_socket_t sock = {0};
@@ -43,6 +47,7 @@ void * server(void * param) {
 
         void *rx_data = NULL;
         int rx_size = 0;
+
         int err = csp_sfp_recv(conn, &rx_data, &rx_size, 480000);
 
         clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -71,7 +76,6 @@ void * server(void * param) {
             csp_print("Total time: %.3f s\n", elapsed);
         }
 
-        usleep(100000);
         csp_close(conn);
     }
 
@@ -83,10 +87,29 @@ int main(int argc, char *argv[]) {
     (void)argv;
 
     const char *device_name = "/dev/ttyACM0";
-    uint8_t address = 10;
+    uint8_t address = server_address;
 
     csp_print("Server device: %s\n", device_name);
     csp_print("Server address: %u\n", address);
+
+    /* Debug RDP activo para diagnostico */
+    csp_dbg_rdp_print = 2;
+
+    /*
+     * El servidor recibe la configuracion RDP desde el paquete SYN del
+     * cliente (ver csp_rdp.c estado CLOSED). Los valores aqui se replican
+     * por claridad pero los que importan son los del cliente.
+     *
+     * delayed_acks=0: ACK inmediato. Ver comentario en csp_sfp_client.c.
+     * packet_timeout=5000ms: el cliente espera 5s antes de retransmitir,
+     * dando tiempo al ACK para llegar despues de que el TNC libera PTT.
+     */
+    csp_rdp_set_opt(1,      /* window_size     */
+                    10000,  /* conn_timeout_ms */
+                    5000,   /* packet_timeout_ms */
+                    0,      /* delayed_acks = DESACTIVADO */
+                    2000,   /* ack_timeout_ms  */
+                    1);     /* ack_delay_count */
 
     csp_init();
     router_start();
