@@ -52,6 +52,7 @@ int csp_sfp_send_own_memcpy(csp_conn_t * conn, const void * data, unsigned int t
 	}
 
 	unsigned int count = 0;
+
 	while ((count < totalsize) && csp_conn_is_active(conn)) {
 
 		sfp_header_t * sfp_header;
@@ -68,9 +69,6 @@ int csp_sfp_send_own_memcpy(csp_conn_t * conn, const void * data, unsigned int t
 			size = mtu;
 		}
 
-		/* Print debug */
-		//csp_print("%s: %d:%d, sending at %p size %u\n", __func__, csp_conn_src(conn), csp_conn_sport(conn), (void *)((uint8_t *)data + count), size);
-
 		/* Copy data */
 		(memcpyfcn)((csp_memptr_t)(uintptr_t)packet->data, (csp_memptr_t)(uintptr_t)(((uint8_t *)data) + count), size);
 		packet->length = size;
@@ -85,9 +83,8 @@ int csp_sfp_send_own_memcpy(csp_conn_t * conn, const void * data, unsigned int t
 
 		csp_print("SFP SEND fragment: offset=%u size=%u total=%u\n", count, size, totalsize);
 		csp_send(conn, packet);
-		usleep(60000);
 		csp_print("SFP SEND done: offset=%u\n", count);
-
+		
 		/* Increment count */
 		count += size;
 	}

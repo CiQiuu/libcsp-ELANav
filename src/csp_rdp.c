@@ -534,21 +534,18 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 					csp_rdp_send_cmp(conn, NULL, RDP_ACK | RDP_SYN, conn->rdp.snd_iss, conn->rdp.rcv_irs);
 
 				} else if (conn->rdp.state == RDP_OPEN &&
-				           csp_rdp_seq_before(rx_header->seq_nr, conn->rdp.rcv_cur + 1)) {
-					/*
-					 * FIX Bug-A: duplicate data packet — already processed.
-					 *
-					 * Send ACK immediately via csp_rdp_send_cmp, bypassing
-					 * csp_rdp_should_ack. The sender just finished transmitting
-					 * this retransmission, so its TNC is now releasing PTT.
-					 * Our immediate ACK is sent within a few ms and travels
-					 * over RF while the sender's TNC completes PTT release.
-					 * By the time our ACK frame ends (~40ms at 9600 baud),
-					 * the sender's TNC is in RX mode and can receive it.
-					 */
-					csp_rdp_protocol("RDP %p: Duplicate data seq %u, re-ACKing (seq %u)\n",
-									 (void *)conn, rx_header->seq_nr, conn->rdp.rcv_cur);
-					csp_rdp_send_cmp(conn, NULL, RDP_ACK, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
+           			csp_rdp_seq_before(rx_header->seq_nr, conn->rdp.rcv_cur + 1)) {
+    					/*
+     				* FIX Bug-A throttle: re-ACK duplicados a lo sumo cada 500ms.
+     				* Con window_size=4, cada retransmisión del cliente genera 4 duplicados
+     				* simultáneos → 4 re-ACKs que inundan el canal half-duplex.
+     				* El throttle limita la tasa a 1 re-ACK por ventana de 500ms.
+     				*/
+    					uint32_t time_now = csp_get_ms();
+    					if (csp_rdp_time_after(time_now, conn->rdp.ack_timestamp + 500)) {
+        					csp_rdp_protocol("RDP %p: Duplicate data seq %u, re-ACKing (throttled)\n", (void *)conn, rx_header->seq_nr);
+        					csp_rdp_send_cmp(conn, NULL, RDP_ACK, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
+    					}
 				}
 				goto discard_open;
 			}

@@ -15,7 +15,7 @@
 #include "csp_posix_helper.h"
 
 #define SERVER_PORT     10
-#define TEST_MSG_SIZE   1048576
+#define TEST_MSG_SIZE   8192
 #define DEFAULT_MTU     128
 #define MAX_CONT        10
 
@@ -66,13 +66,12 @@ static csp_iface_t * add_interface(enum DeviceType type, const char * dev) {
 
     if (type == DEVICE_KISS) {
         csp_usart_conf_t conf = {
-            .device = dev,
-            .baudrate = 57600,
-            .databits = 8,
-            .stopbits = 1,
+            .device        = dev,
+            .baudrate      = 57600,
+            .databits      = 8,
+            .stopbits      = 1,
             .paritysetting = 0,
         };
-
         int err = csp_usart_open_and_add_kiss_interface(&conf,
                                                         CSP_IF_KISS_DEFAULT_NAME,
                                                         client_address,
@@ -89,15 +88,10 @@ static csp_iface_t * add_interface(enum DeviceType type, const char * dev) {
 
 static char * gen_msg(size_t size) {
     char *msg = malloc(size);
-    if (msg == NULL) {
-        return NULL;
-    }
-
-    for (size_t i = 0; i < size - 1; ++i) {
+    if (msg == NULL) return NULL;
+    for (size_t i = 0; i < size - 1; ++i)
         msg[i] = 'A' + (rand() % 26);
-    }
     msg[size - 1] = '\0';
-
     return msg;
 }
 
@@ -141,31 +135,14 @@ int main(int argc, char *argv[]) {
 
     srand(time(NULL));
 
-    /* Debug RDP activo para diagnostico */
     csp_dbg_rdp_print = 2;
 
-    /*
-     * delayed_acks=0: ACK inmediato al recibir cada dato.
-     *
-     * El ACK diferido (delayed_acks=1) no funciona porque el router task
-     * solo llama csp_rdp_check_timeouts cuando llega un paquete — no hay
-     * timer independiente. El ACK diferido a 300ms termina disparando justo
-     * cuando el cliente retransmite (packet_timeout), causando colision en
-     * el canal half-duplex.
-     *
-     * Con delayed_acks=0, el ACK se envia inmediatamente al recibir datos.
-     * El primer ACK puede perderse si el TNC del cliente aun esta liberando
-     * PTT (~200ms), pero el guard rcv_cur==rcv_lsa en csp_rdp_should_ack
-     * impide el ACK storm. Con packet_timeout=5000ms el cliente espera 5s
-     * antes de retransmitir, dando tiempo suficiente para que el ACK llegue
-     * en el segundo intento (cuando el canal ya esta libre).
-     */
-    csp_rdp_set_opt(1,      /* window_size                                */
-                    10000,  /* conn_timeout_ms                            */
-                    5000,   /* packet_timeout_ms  (5s antes de retransmit)*/
-                    0,      /* delayed_acks = DESACTIVADO                 */
-                    2000,   /* ack_timeout_ms (no usado con delayed=0)    */
-                    1);     /* ack_delay_count (no usado con delayed=0)   */
+    csp_rdp_set_opt(4,      /* window_size       */
+                    10000,  /* conn_timeout_ms   */
+                    5000,   /* packet_timeout_ms */
+                    0,      /* delayed_acks      */
+                    2000,   /* ack_timeout_ms    */
+                    1);     /* ack_delay_count   */
 
     csp_init();
     router_start();
@@ -190,24 +167,32 @@ int main(int argc, char *argv[]) {
     csp_print("Server port: %u\n", SERVER_PORT);
 
     int flag = 0;
-    csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, server_address, SERVER_PORT, 3000, CSP_O_RDP);
+    int wait_sec = 2;
+
+    csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, server_address,
+                                   SERVER_PORT, 3000, CSP_O_RDP);
 
     while (conn == NULL) {
-        /* FIX Bug-8: esperar antes de reintentar para reducir zombies */
-        sleep(2);
-        conn = csp_connect(CSP_PRIO_NORM, server_address, SERVER_PORT, 3000, CSP_O_RDP);
-        if (flag == MAX_CONT) {
+        /* FIX Bug-8: backoff exponencial con cap para reducir zombies.
+         * Espera creciente: 2s -> 4s -> 8s -> 12s (cap).
+         * Al tercer intento el zombie ya expiro por conn_timeout=10000ms. */
+        csp_print("Connection failed, retrying in %d s...\n", wait_sec);
+        sleep(wait_sec);
+        wait_sec = (wait_sec * 2 > 12) ? 12 : wait_sec * 2;
+
+        conn = csp_connect(CSP_PRIO_NORM, server_address,
+                           SERVER_PORT, 3000, CSP_O_RDP);
+        if (flag++ == MAX_CONT) {
             csp_print("Connection failed after %d attempts\n", MAX_CONT);
             free(msg);
             return EXIT_FAILURE;
         }
-        flag++;
     }
 
     csp_print("Connection established\n");
     csp_print("Calling csp_sfp_send()...\n");
 
-    int err = csp_sfp_send(conn, msg, (unsigned int) msg_size, mtu, 480000);
+    int err = csp_sfp_send(conn, msg, (unsigned int) msg_size, mtu, 7200000);
 
     csp_close(conn);
     free(msg);

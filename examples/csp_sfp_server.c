@@ -48,7 +48,7 @@ void * server(void * param) {
         void *rx_data = NULL;
         int rx_size = 0;
 
-        int err = csp_sfp_recv(conn, &rx_data, &rx_size, 480000);
+        int err = csp_sfp_recv(conn, &rx_data, &rx_size, 7200000);
 
         clock_gettime(CLOCK_MONOTONIC, &t1);
         double elapsed = (t1.tv_sec - t0.tv_sec) +
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
      * packet_timeout=5000ms: el cliente espera 5s antes de retransmitir,
      * dando tiempo al ACK para llegar despues de que el TNC libera PTT.
      */
-    csp_rdp_set_opt(1,      /* window_size     */
+    csp_rdp_set_opt(4,      /* window_size     */
                     10000,  /* conn_timeout_ms */
                     5000,   /* packet_timeout_ms */
                     0,      /* delayed_acks = DESACTIVADO */
