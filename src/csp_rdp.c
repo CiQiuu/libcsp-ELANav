@@ -238,21 +238,6 @@ static inline int csp_rdp_rx_queue_add(csp_conn_t * conn, csp_packet_t * packet,
 
 static inline bool csp_rdp_should_ack(csp_conn_t * conn) {
 
-	/*
-	 * FIX gratuitous ACK storm:
-	 *
-	 * Do not send an ACK when rcv_cur == rcv_lsa — there is nothing new
-	 * to acknowledge. Without this guard, the periodic csp_rdp_check_ack
-	 * call from csp_rdp_check_timeouts fires every N ms even when the
-	 * receiver has no new data, flooding the half-duplex RF channel.
-	 *
-	 * This guard works correctly with both delayed_acks=0 and =1:
-	 *   - After an ACK is sent via csp_rdp_send_cmp, rcv_lsa is updated
-	 *     to rcv_cur, so subsequent periodic calls return false until
-	 *     new data arrives.
-	 *   - For duplicates, the ACK is sent directly via csp_rdp_send_cmp
-	 *     (bypassing this function), so duplicates always get a re-ACK.
-	 */
 	if (conn->rdp.rcv_cur == conn->rdp.rcv_lsa) {
 		return false;
 	}
@@ -354,12 +339,6 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 
 	if (conn->rdp.state == RDP_OPEN) {
 
-		/*
-		 * Periodic ACK check. csp_rdp_should_ack prevents sending when
-		 * rcv_cur == rcv_lsa (nothing new to acknowledge).
-		 * With delayed_acks=0 this fires whenever new data is pending.
-		 * With delayed_acks=1 this fires after ack_timeout ms.
-		 */
 		csp_rdp_check_ack(conn);
 
 		if (csp_rdp_is_conn_ready_for_tx(conn)) {
@@ -508,11 +487,6 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 			if ((rx_header->flags & RDP_SYN) || !(rx_header->flags & RDP_ACK)) {
 				if (rx_header->seq_nr != conn->rdp.rcv_irs) {
 					if (conn->rdp.state == RDP_OPEN) {
-						/*
-						 * FIX Bug-8: SYN zombie from a previous failed connection.
-						 * In OPEN state, drop silently — do not reset the active
-						 * connection.
-						 */
 						csp_rdp_protocol("RDP %p: Stale SYN in OPEN state (seq=%u), dropping zombie\n",
 										 (void *)conn, rx_header->seq_nr);
 						goto discard_open;
@@ -535,12 +509,7 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 
 				} else if (conn->rdp.state == RDP_OPEN &&
            			csp_rdp_seq_before(rx_header->seq_nr, conn->rdp.rcv_cur + 1)) {
-    					/*
-     				* FIX Bug-A throttle: re-ACK duplicados a lo sumo cada 500ms.
-     				* Con window_size=4, cada retransmisión del cliente genera 4 duplicados
-     				* simultáneos → 4 re-ACKs que inundan el canal half-duplex.
-     				* El throttle limita la tasa a 1 re-ACK por ventana de 500ms.
-     				*/
+
     					uint32_t time_now = csp_get_ms();
     					if (csp_rdp_time_after(time_now, conn->rdp.ack_timestamp + 500)) {
         					csp_rdp_protocol("RDP %p: Duplicate data seq %u, re-ACKing (throttled)\n", (void *)conn, rx_header->seq_nr);
@@ -799,10 +768,7 @@ static int csp_rdp_close_internal(csp_conn_t * conn, uint8_t closed_by, bool sen
 			csp_rdp_send_cmp(conn, NULL, RDP_ACK | RDP_RST, conn->rdp.snd_nxt, conn->rdp.rcv_cur);
 		}
 		csp_rdp_protocol("RDP %p: csp_rdp_close(0x%x)%s -> CLOSE_WAIT\n", (void *)conn, closed_by, send_rst ? ", sent RST" : "");
-		/* FIX zombie TX: flush TX queue immediately on CLOSE_WAIT transition.
-		 * The TX queue is global — packets from this connection must be
-		 * removed NOW so they don't get retransmitted by future connections
-		 * while this connection waits in CLOSE_WAIT. */
+
 		csp_rdp_queue_flush(conn);
 		csp_bin_sem_post(&conn->rdp.tx_wait);
 	}
@@ -819,10 +785,6 @@ static int csp_rdp_close_internal(csp_conn_t * conn, uint8_t closed_by, bool sen
 	csp_rdp_protocol("RDP %p: csp_rdp_close(0x%x) -> CLOSED\n", (void *)conn, closed_by);
 	conn->rdp.state = RDP_CLOSED;
 	conn->rdp.closed_by = 0;
-	/*
-	 * FIX Bug-B: flush TX queue to prevent zombie retransmissions from this
-	 * connection from appearing in future connections (TX queue is global).
-	 */
 	csp_rdp_queue_flush(conn);
 	return CSP_ERR_NONE;
 }

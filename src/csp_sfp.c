@@ -112,6 +112,7 @@ int csp_sfp_recv_fp(csp_conn_t * conn, void ** return_data, int * return_datasiz
 	uint32_t datasize = 0;
 	uint32_t data_offset = 0;
 	int error = CSP_ERR_TIMEDOUT;
+	
 	do {
 		/* Read SFP header */
 		sfp_header_t * sfp_header = csp_sfp_header_remove(packet);

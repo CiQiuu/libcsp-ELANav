@@ -15,9 +15,9 @@
 #include "csp_posix_helper.h"
 
 #define SERVER_PORT     10
-#define TEST_MSG_SIZE   8192
 #define DEFAULT_MTU     128
 #define MAX_CONT        10
+#define IMAGE_PATH      "/home/ciqiu/Repositorios/libcsp-ELANav/examples/rover_test.jpg"
 
 static uint8_t server_address = 10;
 static uint8_t client_address = 20;
@@ -53,7 +53,7 @@ extern void csp_rdp_set_opt(unsigned int window_size, unsigned int conn_timeout_
                              unsigned int ack_timeout, unsigned int ack_delay_count);
 
 static void print_help(void) {
-    csp_print("Usage: csp_sfp_client [options]\n");
+    csp_print("Usage: csp_sfp_clienteImagen [options]\n");
     csp_print(" -k <kiss-device>  set KISS device\n");
     csp_print(" -a <address>      set interface address\n");
     csp_print(" -C <address>      connect to server at address\n");
@@ -84,15 +84,6 @@ static csp_iface_t * add_interface(enum DeviceType type, const char * dev) {
     }
 
     return iface;
-}
-
-static char * gen_msg(size_t size) {
-    char *msg = malloc(size);
-    if (msg == NULL) return NULL;
-    for (size_t i = 0; i < size - 1; ++i)
-        msg[i] = 'A' + (rand() % 26);
-    msg[size - 1] = '\0';
-    return msg;
 }
 
 int main(int argc, char *argv[]) {
@@ -133,8 +124,6 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    srand(time(NULL));
-
     csp_dbg_rdp_print = 2;
 
     csp_rdp_set_opt(4,      /* window_size       */
@@ -153,18 +142,35 @@ int main(int argc, char *argv[]) {
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
-    size_t msg_size = TEST_MSG_SIZE;
-    char *msg = gen_msg(msg_size);
-    if (msg == NULL) {
-        csp_print("Error reserving message buffer\n");
+    FILE *f = fopen(IMAGE_PATH, "rb");
+    if (f == NULL) {
+        csp_print("Error opening image: %s\n", IMAGE_PATH);
         return EXIT_FAILURE;
     }
+    fseek(f, 0, SEEK_END);
+    size_t msg_size = ftell(f);
+    rewind(f);
 
-    csp_print("Generated SFP message: %zu bytes\n", msg_size);
-    csp_print("Using MTU: %u\n", mtu);
+    char *msg = malloc(msg_size);
+    if (msg == NULL) {
+        fclose(f);
+        csp_print("Error reserving buffer for %zu bytes\n", msg_size);
+        return EXIT_FAILURE;
+    }
+    if (fread(msg, 1, msg_size, f) != msg_size) {
+        fclose(f);
+        free(msg);
+        csp_print("Error reading image\n");
+        return EXIT_FAILURE;
+    }
+    fclose(f);
+
+    csp_print("Image loaded: %s\n", IMAGE_PATH);
+    csp_print("Image size:   %zu bytes\n", msg_size);
+    csp_print("Using MTU:    %u\n", mtu);
     csp_print("Client address: %u\n", client_address);
     csp_print("Server address: %u\n", server_address);
-    csp_print("Server port: %u\n", SERVER_PORT);
+    csp_print("Server port:    %u\n", SERVER_PORT);
 
     int flag = 0;
     int wait_sec = 2;
@@ -173,6 +179,7 @@ int main(int argc, char *argv[]) {
                                    SERVER_PORT, 3000, CSP_O_RDP);
 
     while (conn == NULL) {
+        /* FIX Bug-8: backoff exponencial con cap para reducir zombies. */
         csp_print("Connection failed, retrying in %d s...\n", wait_sec);
         sleep(wait_sec);
         wait_sec = (wait_sec * 2 > 12) ? 12 : wait_sec * 2;
@@ -187,7 +194,7 @@ int main(int argc, char *argv[]) {
     }
 
     csp_print("Connection established\n");
-    csp_print("Calling csp_sfp_send()...\n");
+    csp_print("Sending image...\n");
 
     int err = csp_sfp_send(conn, msg, (unsigned int) msg_size, mtu, 7200000);
 
@@ -198,12 +205,12 @@ int main(int argc, char *argv[]) {
     double elapsed = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
 
     if (err == CSP_ERR_NONE) {
-        csp_print("\nSFP transfer OK\n");
+        csp_print("\nImage transfer OK\n");
         csp_print("Bytes: %zu\n", msg_size);
         csp_print("Time:  %.3f s\n", elapsed);
         return EXIT_SUCCESS;
     } else {
-        csp_print("\nSFP transfer failed: %d\n", err);
+        csp_print("\nImage transfer failed: %d\n", err);
         csp_print("Time:  %.3f s\n", elapsed);
         return EXIT_FAILURE;
     }
