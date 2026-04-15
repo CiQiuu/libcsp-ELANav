@@ -48,4 +48,11 @@ if(CSP_POSIX)
   target_link_libraries(csp_node1 PRIVATE csp csp_common csp_posix_helper Threads::Threads)
   target_link_libraries(csp_node2 PRIVATE csp csp_common csp_posix_helper Threads::Threads)
 
+  add_executable(csp_sfp_gs ${CSP_SAMPLES_EXCLUDE} csp_sfp_gs.c)
+  target_include_directories(csp_sfp_gs PRIVATE ${csp_inc})
+  target_link_libraries(csp_sfp_gs PRIVATE csp csp_common csp_posix_helper Threads::Threads)
+  add_executable(csp_sfp_rover ${CSP_SAMPLES_EXCLUDE} csp_sfp_rover.c)
+  target_include_directories(csp_sfp_rover PRIVATE ${csp_inc})
+  target_link_libraries(csp_sfp_rover PRIVATE csp csp_common csp_posix_helper Threads::Threads)
+
 endif()
