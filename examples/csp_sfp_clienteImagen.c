@@ -126,9 +126,9 @@ int main(int argc, char *argv[]) {
 
     csp_dbg_rdp_print = 2;
 
-    csp_rdp_set_opt(4,      /* window_size       */
+     csp_rdp_set_opt(4,      /* window_size       */
                     10000,  /* conn_timeout_ms   */
-                    5000,   /* packet_timeout_ms */
+                    20000,   /* packet_timeout_ms */
                     0,      /* delayed_acks      */
                     2000,   /* ack_timeout_ms    */
                     1);     /* ack_delay_count   */

@@ -15,7 +15,7 @@
 #include "csp_posix_helper.h"
 
 #define SERVER_PORT     10
-#define TEST_MSG_SIZE   8192
+#define TEST_MSG_SIZE   16000 //(1024*1024)
 #define DEFAULT_MTU     128
 #define MAX_CONT        10
 
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
 
     csp_rdp_set_opt(4,      /* window_size       */
                     10000,  /* conn_timeout_ms   */
-                    5000,   /* packet_timeout_ms */
+                    20000,   /* packet_timeout_ms */
                     0,      /* delayed_acks      */
                     2000,   /* ack_timeout_ms    */
                     1);     /* ack_delay_count   */

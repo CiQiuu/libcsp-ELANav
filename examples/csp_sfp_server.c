@@ -36,7 +36,7 @@ void * server(void * param) {
     while (1) {
         csp_conn_t *conn = csp_accept(&sock, 1500);
         if (conn == NULL) {
-            csp_print("...\n");
+            //csp_print("...\n");
             continue;
         }
 
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
-    const char *device_name = "/dev/ttyACM0";
+    const char *device_name = "/dev/ttyACM1";
     uint8_t address = server_address;
 
     csp_print("Server device: %s\n", device_name);
@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
 
     csp_rdp_set_opt(4,      /* window_size     */
                     10000,  /* conn_timeout_ms */
-                    5000,   /* packet_timeout_ms */
+                    15000,   /* packet_timeout_ms */
                     0,      /* delayed_acks = off */
                     2000,   /* ack_timeout_ms  */
                     1);     /* ack_delay_count */

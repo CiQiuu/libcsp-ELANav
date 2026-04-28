@@ -31,11 +31,26 @@ int main(int argc, char *argv[]) {
     printf("=== ROVER START ===\n");
     printf("Device: %s  addr=20  port=%d\n", device, SERVER_PORT);
 
-    /* RDP — timeouts amplios para NinoTNC half-duplex a 9600 baud */
+    /*
+     * RDP — configuracion validada para NinoTNC half-duplex a 9600 baud
+     *
+     * window_size=4:      BDP = 960 B/s * 0.838 s ≈ 804 B
+     *                     804 / 162 B por trama ≈ 5 → usar 4 (probado)
+     *                     window=8 supera el BDP y genera retransmisiones
+     *                     masivas (8 buenos + 8 duplicados ciclicamente).
+     *
+     * packet_timeout=15000ms: debe ser > RTT bajo congestion (2000-4000 ms).
+     *                         Valor validado experimentalmente: mejora 6.74x.
+     *
+     * conn_timeout=60000ms:   cubre transferencias de imagen de larga duracion.
+     *
+     * delayed_acks=0:     ACK inmediato. Critico en half-duplex para evitar
+     *                     que el timeout expire mientras el ACK espera en cola.
+     */
     csp_dbg_rdp_print = 2;
     csp_rdp_set_opt(4,      /* window_size      */
                     60000,  /* conn_timeout_ms  */
-                    60000,  /* packet_timeout_ms */
+                    25000,  /* packet_timeout_ms */
                     0,      /* delayed_acks     */
                     2000,   /* ack_timeout_ms   */
                     1);     /* ack_delay_count  */
@@ -77,9 +92,11 @@ int main(int argc, char *argv[]) {
             char *cmd = (char *)packet->data;
             printf("CMD: [%s]\n", cmd);
 
-            /* ── Imagen: bloque SFP ─────────────────────────────── */
+            /* ── Imagen: bloque SFP ─────────────────────────────────────*/
+
             if (strcmp(cmd, "i") == 0) {
                 printf("Enviando imagen via SFP...\n");
+
                 FILE *f = fopen("rover_test.jpg", "rb");
                 if (!f) {
                     printf("ERROR: rover_test.jpg no encontrado\n");
@@ -96,10 +113,15 @@ int main(int argc, char *argv[]) {
                     char *img = malloc((size_t)img_size);
                     if (img) {
                         if (fread(img, 1, (size_t)img_size, f) == (size_t)img_size) {
-                            printf("Imagen cargada: %ld bytes — enviando SFP MTU=128...\n",
-                                   img_size);
-                            int err = csp_sfp_send(conn, img, (unsigned int)img_size,
-                                                   128, 7200000);
+                            uint32_t mtu = 200; /* CSP_BUFFER_SIZE(256) - CSP(4) - SFP(8) - RDP(~44) */ /* AX.25(256) - CSP(4) - SFP(8) */
+                            printf("Imagen: %ld B — SFP MTU=%u — "
+                                   "fragmentos estimados: %u\n",
+                                   img_size, mtu,
+                                   (unsigned int)((img_size + mtu - 1) / mtu));
+
+                            int err = csp_sfp_send(conn, img,
+                                                   (unsigned int)img_size,
+                                                   mtu, 7200000);
                             printf("SFP send result: %d\n", err);
                         } else {
                             printf("ERROR: fread incompleto\n");
@@ -109,10 +131,10 @@ int main(int argc, char *argv[]) {
                     fclose(f);
                 }
                 csp_buffer_free(packet);
-                continue;   /* siguiente paquete en la misma conexion */
+                continue;
             }
 
-            /* ── Sensores: paquete CSP simple ───────────────────── */
+            /* ── Sensoress──────────────────────── */
             char respuesta[128];
 
             if (strcmp(cmd, "t") == 0) {

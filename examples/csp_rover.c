@@ -1,3 +1,6 @@
+//ok, vamos a crear la nueva version de csp_rover pero mejorada y adaptada a mi proyecto
+//Necesito que mantengas las opciones de los sensores pero incluyendo la opcion de enviar una imagen como ya probamos que se puede, ademas de utilizar el sfp para enviar  y/o recibir, ademas de que los datos que envie el rover de los sensores, que se generen aleatoriamente con la finalidad de demostrar el manejo de paquetes de datos distintos
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

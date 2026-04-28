@@ -3,20 +3,18 @@
 #include <unistd.h>
 #include <string.h>
 #include <getopt.h>
-
+#include <time.h>
 #include <csp/csp.h>
 #include <csp/csp_sfp.h>
 #include <csp/csp_debug.h>
 #include <csp/drivers/usart.h>
-
-#include "csp_posix_helper.h"   
+#include "csp_posix_helper.h"
 
 #define SERVER_PORT  10
 #define ROVER_ADDR   20
-#define CONN_TIMEOUT 10000   /* ms  */
+#define CONN_TIMEOUT 10000   /* ms */
 
 int main(int argc, char *argv[]) {
-
     const char *device = NULL;
     int opt;
 
@@ -32,10 +30,30 @@ int main(int argc, char *argv[]) {
     printf("Device: %s  addr=10  rover=%d  port=%d\n",
            device, ROVER_ADDR, SERVER_PORT);
 
+    /*
+     * window_size=4:      BDP = 960 B/s × 0.838 s ≈ 804 B
+     *                     804 / 162 B por trama ≈ 5 → usar 4 (probado)
+     *                     window=8 genera retransmisiones masivas porque
+     *                     supera el BDP del canal half-duplex: el patron
+     *                     observado es 8 buenos + 8 duplicados ciclicamente.
+     *
+     * packet_timeout=15000ms: debe ser > RTT bajo congestion (2000-4000 ms).
+     *                         Valor validado: mejora de 6.74× sobre linea base.
+     *                         Con 30000 ms no mejora la transferencia y solo
+     *                         alarga el tiempo de deteccion de fallos reales.
+     *
+     * conn_timeout=60000ms:   cubre transferencias de imagen de larga duracion.
+     *                         El valor anterior (10000 ms) causaba cierre de
+     *                         sesion durante transferencias largas.
+     *
+     * delayed_acks=0:     ACK inmediato por fragmento. Critico en half-duplex:
+     *                     si el ACK espera en cola, el packet_timeout expira
+     *                     antes y genera retransmisiones innecesarias.
+     */
     csp_dbg_rdp_print = 2;
     csp_rdp_set_opt(4,      /* window_size      */
                     60000,  /* conn_timeout_ms  */
-                    60000,  /* packet_timeout_ms */
+                    25000,  /* packet_timeout_ms */
                     0,      /* delayed_acks     */
                     2000,   /* ack_timeout_ms   */
                     1);     /* ack_delay_count  */
@@ -60,9 +78,10 @@ int main(int argc, char *argv[]) {
     csp_rtable_set(0, 0, iface, CSP_NO_VIA_ADDRESS);
 
 
-    /* ── Conexión con backoff ───────────────────────── */
-    printf("Conectando con rover (addr=%d)...\n", ROVER_ADDR);
 
+    /* ── Conexion con backoff ──────────────────────────── */
+    
+    printf("Conectando con rover (addr=%d)...\n", ROVER_ADDR);
     int wait = 2;
     csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, ROVER_ADDR,
                                    SERVER_PORT, CONN_TIMEOUT, CSP_O_RDP);
@@ -78,13 +97,13 @@ int main(int argc, char *argv[]) {
     printf("Comandos: t=temperatura  h=humedad  s=sensor  i=imagen  q=salir\n");
 
 
-    /* ── Loop ────────────────────────────────────────── */
-    while (1) {
 
+    /* ── Loop principal ─────────────────────────────────────────────── */
+    
+    while (1) {
         char cmd[32];
         printf("cmd> ");
         fflush(stdout);
-
         if (scanf("%31s", cmd) != 1) continue;
         if (cmd[0] == 'q') break;
 
@@ -97,26 +116,44 @@ int main(int argc, char *argv[]) {
         p->length = strlen((char *)p->data) + 1;
         csp_send(conn, p);
 
-        /* ── Respuesta: imagen o dato ─────────────── */
+
+
+        /* ── Respuesta segun tipo de comando ───────────────────────── */
+        
         if (strcmp(cmd, "i") == 0) {
+
             printf("Esperando imagen SFP (timeout=2h)...\n");
-            void *data  = NULL;
-            int   size  = 0;
-            int   err   = csp_sfp_recv(conn, &data, &size, 7200000);
+            void *data = NULL;
+            int   size = 0;
+
+            struct timespec t0, t1;
+            clock_gettime(CLOCK_MONOTONIC, &t0);
+
+            int   err  = csp_sfp_recv(conn, &data, &size, 7200000);
+
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            double elapsed = (t1.tv_sec - t0.tv_sec) +
+                             (t1.tv_nsec - t0.tv_nsec) / 1e9;
+
             if (err == CSP_ERR_NONE && data) {
                 printf("Imagen recibida: %d bytes\n", size);
+                printf("Tiempo de transferencia: %.2f s\n", elapsed);
+                printf("Goodput: %.2f B/s\n", size / elapsed);
                 FILE *fp = fopen("gs_received_image.jpg", "wb");
                 if (fp) {
                     fwrite(data, 1, (size_t)size, fp);
                     fclose(fp);
                     printf("Guardada en gs_received_image.jpg\n");
+                } else {
+                    printf("ERROR: no se pudo abrir gs_received_image.jpg\n");
                 }
                 free(data);
             } else {
-                printf("ERROR SFP: %d\n", err);
+                printf("ERROR SFP: %d (%.2f s)\n", err, elapsed);
             }
+
         } else {
-            
+
             csp_packet_t *resp = csp_read(conn, 10000);
             if (resp) {
                 printf("RESP: %s\n", (char *)resp->data);

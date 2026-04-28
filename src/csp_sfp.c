@@ -1,4 +1,5 @@
 #include <csp/csp_sfp.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <csp/csp_buffer.h>
 #include <csp/csp_debug.h>
@@ -87,6 +88,8 @@ int csp_sfp_send_own_memcpy(csp_conn_t * conn, const void * data, unsigned int t
 		
 		/* Increment count */
 		count += size;
+		
+		static unsigned int sfp_frag_count = 0;
 	}
 
 	return CSP_ERR_NONE;
