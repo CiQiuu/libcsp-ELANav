@@ -1,0 +1,11 @@
+Script started on 2026-04-30 13:35:07-06:00 [COMMAND="sudo ./build/examples/csp_sfp_gs -k /dev/ttyACM0" TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS="67" LINES="37"]
+[sudo] password for ciqiu: 
+=== GS START ===
+Device: /dev/ttyACM0  addr=10  rover=20  port=10
+Conectando con rover (addr=20)...
+[34mRDP 0x74c4a688cff8: Active connect, conn state 0
+[0m[34mRDP 0x74c4a688cff8: AC: Sending SYN
+[0m[34mRDP 0x74c4a688cff8: Send CMP S 1: syn 1, ack 0, eack 0, rst 0, seq_nr 40891, ack_nr     0, packet_len 29 (24)
+[0m[34mRDP 0x74c4a688cff8: AC: Waiting for SYN/ACK reply...
+^C
+Script done on 2026-04-30 13:35:12-06:00 [COMMAND_EXIT_CODE="130"]
