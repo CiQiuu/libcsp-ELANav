@@ -12,7 +12,7 @@
 
 #define SERVER_PORT  10
 #define ROVER_ADDR   20
-#define CONN_TIMEOUT 10000   /* ms */
+#define CONN_TIMEOUT 1000    /* ms — fail-fast en half-duplex, el backoff reintenta */
 
 int main(int argc, char *argv[]) {
     const char *device = NULL;
@@ -51,15 +51,14 @@ int main(int argc, char *argv[]) {
      *                     antes y genera retransmisiones innecesarias.
      */
     csp_dbg_rdp_print = 2;
-    csp_rdp_set_opt(4,      /* window_size      */
-                    300000,  /* conn_timeout_ms  */
-                    25000,  /* packet_timeout_ms */
-                    0,      /* delayed_acks     */
-                    2000,   /* ack_timeout_ms   */
-                    1);     /* ack_delay_count  */
+    csp_rdp_set_opt(4,      /* window_size       */
+                		300000, /* conn_timeout_ms   */
+                		20000,  /* packet_timeout_ms */
+                		0,      /* delayed_acks      */
+                		2000,   /* ack_timeout_ms    */
+                		1);     /* ack_delay_count   */
 
     csp_init();
-    router_start();
 
     csp_iface_t *iface;
     csp_usart_conf_t conf = {
@@ -76,30 +75,12 @@ int main(int argc, char *argv[]) {
     }
     iface->is_default = 1;
     csp_rtable_set(0, 0, iface, CSP_NO_VIA_ADDRESS);
+    router_start();
 
-
-
-    /* ── Conexion con backoff ──────────────────────────── */
-    
-    printf("Conectando con rover (addr=%d)...\n", ROVER_ADDR);
-    int wait = 2;
-    csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, ROVER_ADDR,
-                                   SERVER_PORT, CONN_TIMEOUT, CSP_O_RDP);
-    while (!conn) {
-        printf("Retry en %d s...\n", wait);
-        sleep(wait);
-        wait = (wait * 2 > 12) ? 12 : wait * 2;
-        conn = csp_connect(CSP_PRIO_NORM, ROVER_ADDR,
-                           SERVER_PORT, CONN_TIMEOUT, CSP_O_RDP);
-    }
-
-    printf("CONNECTED\n");
     printf("Comandos: t=temperatura  h=humedad  s=sensor  i=imagen  q=salir\n");
 
-
-
     /* ── Loop principal ─────────────────────────────────────────────── */
-    
+
     while (1) {
         char cmd[32];
         printf("cmd> ");
@@ -107,19 +88,25 @@ int main(int argc, char *argv[]) {
         if (scanf("%31s", cmd) != 1) continue;
         if (cmd[0] == 'q') break;
 
+        csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, ROVER_ADDR,
+                                       SERVER_PORT, CONN_TIMEOUT, CSP_O_RDP);
+        if (!conn) {
+            printf("ERROR: no se pudo conectar con el rover\n");
+            continue;
+        }
+
         csp_packet_t *p = csp_buffer_get(0);
         if (!p) {
             printf("ERROR: sin buffer CSP\n");
+            csp_close(conn);
             continue;
         }
         snprintf((char *)p->data, CSP_BUFFER_SIZE, "%s", cmd);
         p->length = strlen((char *)p->data) + 1;
         csp_send(conn, p);
 
-
-
         /* ── Respuesta segun tipo de comando ───────────────────────── */
-        
+
         if (strcmp(cmd, "i") == 0) {
 
             printf("Esperando imagen SFP (timeout=2h)...\n");
@@ -129,7 +116,7 @@ int main(int argc, char *argv[]) {
             struct timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
 
-            int   err  = csp_sfp_recv(conn, &data, &size, 7200000);
+            int err = csp_sfp_recv(conn, &data, &size, 7200000);
 
             clock_gettime(CLOCK_MONOTONIC, &t1);
             double elapsed = (t1.tv_sec - t0.tv_sec) +
@@ -162,9 +149,10 @@ int main(int argc, char *argv[]) {
                 printf("Sin respuesta (timeout)\n");
             }
         }
+
+        csp_close(conn);
     }
 
-    csp_close(conn);
     printf("GS finalizado\n");
     return 0;
 }

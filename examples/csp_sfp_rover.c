@@ -48,15 +48,14 @@ int main(int argc, char *argv[]) {
      *                     que el timeout expire mientras el ACK espera en cola.
      */
     csp_dbg_rdp_print = 2;
-    csp_rdp_set_opt(4,      /* window_size      */
-                    300000,  /* conn_timeout_ms  */
-                    25000,  /* packet_timeout_ms */
-                    0,      /* delayed_acks     */
-                    2000,   /* ack_timeout_ms   */
-                    1);     /* ack_delay_count  */
+    csp_rdp_set_opt(4,      /* window_size       */
+                		300000, /* conn_timeout_ms   */
+                		20000,  /* packet_timeout_ms */
+                		0,      /* delayed_acks      */
+                		2000,   /* ack_timeout_ms    */
+                		1);     /* ack_delay_count   */
 
     csp_init();
-    router_start();
 
     csp_iface_t *iface;
     csp_usart_conf_t conf = {
@@ -73,9 +72,10 @@ int main(int argc, char *argv[]) {
     }
     iface->is_default = 1;
     csp_rtable_set(0, 0, iface, CSP_NO_VIA_ADDRESS);
+    router_start();
 
     csp_socket_t sock = {0};
-    csp_bind(&sock, SERVER_PORT);
+    csp_bind(&sock, CSP_ANY);
     csp_listen(&sock, 10);
 
     printf("ROVER READY — esperando conexion en puerto %d\n", SERVER_PORT);
@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
                          40.0 + (rand() % 500) / 10.0);
 
             } else {
-                snprintf(respuesta, sizeof(respuesta), "UNKNOWN: %s", cmd);
+                snprintf(respuesta, sizeof(respuesta), "UNKNOWN: %.118s", cmd);
             }
 
             printf("RSP: %s\n", respuesta);
