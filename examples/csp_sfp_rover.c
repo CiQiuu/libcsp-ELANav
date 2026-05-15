@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
      */
     csp_dbg_rdp_print = 2;
     csp_rdp_set_opt(4,      /* window_size       */
-                		300000, /* conn_timeout_ms   */
+                		60000, /* conn_timeout_ms   */
                 		20000,  /* packet_timeout_ms */
                 		0,      /* delayed_acks      */
                 		2000,   /* ack_timeout_ms    */
@@ -97,9 +97,14 @@ int main(int argc, char *argv[]) {
             if (strcmp(cmd, "i") == 0) {
                 printf("Enviando imagen via SFP...\n");
 
-                FILE *f = fopen("rover_test.jpg", "rb");
+                /* Buscar rover_test.jpg primero en ruta de produccion (Yocto),
+                 * luego en cwd (desarrollo en laptop) */
+                FILE *f = fopen("/usr/share/elanav/rover_test.jpg", "rb");
                 if (!f) {
-                    printf("ERROR: rover_test.jpg no encontrado\n");
+                    f = fopen("rover_test.jpg", "rb");
+                }
+                if (!f) {
+                    printf("ERROR: rover_test.jpg no encontrado en /usr/share/elanav/ ni en cwd\n");
                     csp_packet_t *resp = csp_buffer_get(0);
                     if (resp) {
                         strcpy((char *)resp->data, "ERR: NO IMG");
