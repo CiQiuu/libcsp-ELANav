@@ -14,6 +14,23 @@
 #define ROVER_ADDR   20
 #define CONN_TIMEOUT 1000    /* ms — fail-fast en half-duplex, el backoff reintenta */
 
+/* ── Instrumentacion de tiempos ─────────────────────────────────────── */
+
+static struct timespec g_t_start;
+
+static inline void tmark_start(void) {
+    clock_gettime(CLOCK_MONOTONIC, &g_t_start);
+}
+
+static inline double t_ms_since_start(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (now.tv_sec  - g_t_start.tv_sec)  * 1000.0
+         + (now.tv_nsec - g_t_start.tv_nsec) / 1.0e6;
+}
+
+#define TMARK(label) printf("  [T+%8.1f ms] %s\n", t_ms_since_start(), label)
+
 int main(int argc, char *argv[]) {
     const char *device = NULL;
     int opt;
@@ -88,12 +105,22 @@ int main(int argc, char *argv[]) {
         if (scanf("%31s", cmd) != 1) continue;
         if (cmd[0] == 'q') break;
 
+        /* ── T=0: inicio de medicion ────────────────────────────── */
+        tmark_start();
+        printf("\n=== Comando '%s' ===\n", cmd);
+        TMARK("inicio (T=0)");
+
+        TMARK("csp_connect inicio");
         csp_conn_t *conn = csp_connect(CSP_PRIO_NORM, ROVER_ADDR,
                                        SERVER_PORT, CONN_TIMEOUT, CSP_O_RDP);
         if (!conn) {
+            TMARK("csp_connect FAIL");
             printf("ERROR: no se pudo conectar con el rover\n");
+            printf("=== Comando '%s' fallido en %.1f ms ===\n\n",
+                   cmd, t_ms_since_start());
             continue;
         }
+        TMARK("csp_connect OK (handshake completo)");
 
         csp_packet_t *p = csp_buffer_get(0);
         if (!p) {
@@ -103,7 +130,10 @@ int main(int argc, char *argv[]) {
         }
         snprintf((char *)p->data, CSP_BUFFER_SIZE, "%s", cmd);
         p->length = strlen((char *)p->data) + 1;
+
+        TMARK("csp_send inicio");
         csp_send(conn, p);
+        TMARK("csp_send OK");
 
         /* ── Respuesta segun tipo de comando ───────────────────────── */
 
@@ -113,6 +143,7 @@ int main(int argc, char *argv[]) {
             void *data = NULL;
             int   size = 0;
 
+            TMARK("csp_sfp_recv inicio");
             struct timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
 
@@ -121,10 +152,11 @@ int main(int argc, char *argv[]) {
             clock_gettime(CLOCK_MONOTONIC, &t1);
             double elapsed = (t1.tv_sec - t0.tv_sec) +
                              (t1.tv_nsec - t0.tv_nsec) / 1e9;
+            TMARK("csp_sfp_recv retorno");
 
             if (err == CSP_ERR_NONE && data) {
                 printf("Imagen recibida: %d bytes\n", size);
-                printf("Tiempo de transferencia: %.2f s\n", elapsed);
+                printf("Tiempo de transferencia SFP: %.2f s\n", elapsed);
                 printf("Goodput: %.2f B/s\n", size / elapsed);
                 FILE *fp = fopen("gs_received_image.jpg", "wb");
                 if (fp) {
@@ -141,16 +173,24 @@ int main(int argc, char *argv[]) {
 
         } else {
 
+            TMARK("csp_read esperando respuesta");
             csp_packet_t *resp = csp_read(conn, 10000);
             if (resp) {
+                TMARK("csp_read OK");
                 printf("RESP: %s\n", (char *)resp->data);
                 csp_buffer_free(resp);
             } else {
+                TMARK("csp_read TIMEOUT");
                 printf("Sin respuesta (timeout)\n");
             }
         }
 
+        TMARK("csp_close inicio");
         csp_close(conn);
+        TMARK("csp_close OK");
+
+        printf("=== Comando '%s' total: %.1f ms ===\n\n",
+               cmd, t_ms_since_start());
     }
 
     printf("GS finalizado\n");
