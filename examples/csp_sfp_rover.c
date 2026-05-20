@@ -15,21 +15,39 @@
 #define SERVER_PORT 10
 
 int main(int argc, char *argv[]) {
+    /* Salida sin buffer para que journalctl y SSH redirect vean los logs
+     * en tiempo real. Critico durante la campana de medicion en RF.       */
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     const char *device = NULL;
+    int packet_timeout_ms = 20000;   /* default: configuracion A2 validada  */
     int opt;
 
-    while ((opt = getopt(argc, argv, "k:")) != -1) {
-        if (opt == 'k') device = optarg;
+    while ((opt = getopt(argc, argv, "k:t:")) != -1) {
+        switch (opt) {
+            case 'k': device = optarg; break;
+            case 't': packet_timeout_ms = atoi(optarg); break;
+            default:
+                printf("Uso: %s -k <device> [-t <packet_timeout_ms>]\n", argv[0]);
+                return 1;
+        }
     }
     if (!device) {
-        printf("Uso: %s -k <device>\n", argv[0]);
+        printf("Uso: %s -k <device> [-t <packet_timeout_ms>]\n", argv[0]);
+        return 1;
+    }
+    if (packet_timeout_ms < 1000 || packet_timeout_ms > 120000) {
+        printf("ERROR: packet_timeout_ms fuera de rango [1000, 120000]: %d\n",
+               packet_timeout_ms);
         return 1;
     }
 
     srand((unsigned int)time(NULL));
 
     printf("=== ROVER START ===\n");
-    printf("Device: %s  addr=20  port=%d\n", device, SERVER_PORT);
+    printf("Device: %s  addr=20  port=%d  packet_timeout_ms=%d\n",
+           device, SERVER_PORT, packet_timeout_ms);
 
     /*
      * RDP — configuracion validada para NinoTNC half-duplex a 9600 baud
@@ -48,12 +66,12 @@ int main(int argc, char *argv[]) {
      *                     que el timeout expire mientras el ACK espera en cola.
      */
     csp_dbg_rdp_print = 2;
-    csp_rdp_set_opt(4,      /* window_size       */
-                		60000, /* conn_timeout_ms   */
-                		20000,  /* packet_timeout_ms */
-                		0,      /* delayed_acks      */
-                		2000,   /* ack_timeout_ms    */
-                		1);     /* ack_delay_count   */
+    csp_rdp_set_opt(4,                  /* window_size       */
+                    60000,              /* conn_timeout_ms   */
+                    packet_timeout_ms,  /* packet_timeout_ms */
+                    0,                  /* delayed_acks      */
+                    2000,               /* ack_timeout_ms    */
+                    1);                 /* ack_delay_count   */
 
     csp_init();
 

@@ -32,20 +32,36 @@ static inline double t_ms_since_start(void) {
 #define TMARK(label) printf("  [T+%8.1f ms] %s\n", t_ms_since_start(), label)
 
 int main(int argc, char *argv[]) {
+    /* Salida sin buffer para ver logs en tiempo real durante la campana */
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     const char *device = NULL;
+    int packet_timeout_ms = 20000;   /* default: configuracion A2 validada */
     int opt;
 
-    while ((opt = getopt(argc, argv, "k:")) != -1) {
-        if (opt == 'k') device = optarg;
+    while ((opt = getopt(argc, argv, "k:t:")) != -1) {
+        switch (opt) {
+            case 'k': device = optarg; break;
+            case 't': packet_timeout_ms = atoi(optarg); break;
+            default:
+                printf("Uso: %s -k <device> [-t <packet_timeout_ms>]\n", argv[0]);
+                return 1;
+        }
     }
     if (!device) {
-        printf("Uso: %s -k <device>\n", argv[0]);
+        printf("Uso: %s -k <device> [-t <packet_timeout_ms>]\n", argv[0]);
+        return 1;
+    }
+    if (packet_timeout_ms < 1000 || packet_timeout_ms > 120000) {
+        printf("ERROR: packet_timeout_ms fuera de rango [1000, 120000]: %d\n",
+               packet_timeout_ms);
         return 1;
     }
 
     printf("=== GS START ===\n");
-    printf("Device: %s  addr=10  rover=%d  port=%d\n",
-           device, ROVER_ADDR, SERVER_PORT);
+    printf("Device: %s  addr=10  rover=%d  port=%d  packet_timeout_ms=%d\n",
+           device, ROVER_ADDR, SERVER_PORT, packet_timeout_ms);
 
     /*
      * window_size=4:      BDP = 960 B/s × 0.838 s ≈ 804 B
@@ -68,12 +84,12 @@ int main(int argc, char *argv[]) {
      *                     antes y genera retransmisiones innecesarias.
      */
     csp_dbg_rdp_print = 2;
-    csp_rdp_set_opt(4,      /* window_size       */
-                		60000, /* conn_timeout_ms   */
-                		20000,  /* packet_timeout_ms */
-                		0,      /* delayed_acks      */
-                		2000,   /* ack_timeout_ms    */
-                		1);     /* ack_delay_count   */
+    csp_rdp_set_opt(4,                  /* window_size       */
+                    60000,              /* conn_timeout_ms   */
+                    packet_timeout_ms,  /* packet_timeout_ms */
+                    0,                  /* delayed_acks      */
+                    2000,               /* ack_timeout_ms    */
+                    1);                 /* ack_delay_count   */
 
     csp_init();
 
