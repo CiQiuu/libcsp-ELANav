@@ -157,6 +157,127 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
+            /* ── Video: bloque SFP ──────────────────────────────────────*/
+
+            if (strcmp(cmd, "v") == 0) {
+                printf("Enviando video via SFP...\n");
+
+                /* Buscar rover_test.mp4 primero en ruta de produccion (Yocto),
+                 * luego en cwd (desarrollo en laptop) */
+                FILE *f = fopen("/usr/share/elanav/rover_test.mp4", "rb");
+                if (!f) {
+                    f = fopen("rover_test.mp4", "rb");
+                }
+                if (!f) {
+                    printf("ERROR: rover_test.mp4 no encontrado en /usr/share/elanav/ ni en cwd\n");
+                    csp_packet_t *resp = csp_buffer_get(0);
+                    if (resp) {
+                        strcpy((char *)resp->data, "ERR: NO VID");
+                        resp->length = strlen((char *)resp->data) + 1;
+                        csp_send(conn, resp);
+                    }
+                } else {
+                    fseek(f, 0, SEEK_END);
+                    long vid_size = ftell(f);
+                    rewind(f);
+                    char *vid = malloc((size_t)vid_size);
+                    if (vid) {
+                        if (fread(vid, 1, (size_t)vid_size, f) == (size_t)vid_size) {
+                            uint32_t mtu = 200; /* mismo MTU que imagen — consistente con campana RF */
+                            printf("Video: %ld B — SFP MTU=%u — "
+                                   "fragmentos estimados: %u\n",
+                                   vid_size, mtu,
+                                   (unsigned int)((vid_size + mtu - 1) / mtu));
+
+                            int err = csp_sfp_send(conn, vid,
+                                                   (unsigned int)vid_size,
+                                                   mtu, 7200000);
+                            printf("SFP send result: %d\n", err);
+                        } else {
+                            printf("ERROR: fread incompleto\n");
+                        }
+                        free(vid);
+                    }
+                    fclose(f);
+                }
+                csp_buffer_free(packet);
+                continue;
+            }
+
+            /* ── Telemetria completa: bloque SFP ────────────────────────*/
+
+            if (strcmp(cmd, "d") == 0) {
+                /* Telemetria completa del rover Olympus.
+                 * 31 campos en texto plano "key=value" estilo respuestas simples.
+                 * Tamano esperado ~600-700 B (~3-4 fragmentos SFP a MTU 200).
+                 * Datos simulados; se reemplazan por IPC con LLC al integrar. */
+                char tlm[1024];
+                struct timespec ts;
+                clock_gettime(CLOCK_MONOTONIC, &ts);
+                long ts_ms = (long)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+
+                int n = 0;
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "rover=olympus fw=2.20 ts_ms=%ld\n", ts_ms);
+
+                /* Distancias: VL53L0X (ToF I2C 0x29), HC-SR04, TF02 LiDAR (USART2) */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "dist_tof_mm=%d dist_us_mm=%d dist_lidar_mm=%d\n",
+                    50 + rand() % 1951, 50 + rand() % 3951, 150 + rand() % 2251);
+
+                /* Voltajes de los 3 bancos (INA3221, LSB=8mV, rango 0-26V) */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "bank1_mV=%d bank2_mV=%d bank3_mV=%d\n",
+                    11500 + rand() % 1500, 11500 + rand() % 1500, 11500 + rand() % 1500);
+
+                /* IMU MPU-6050: 3 accel (g) + 3 gyro (deg/s) */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "ax=%+.3f ay=%+.3f az=%+.3f gx=%+.2f gy=%+.2f gz=%+.2f\n",
+                    -0.05 + (rand() % 110) / 1000.0,
+                    -0.05 + (rand() % 110) / 1000.0,
+                     0.95 + (rand() % 100) / 1000.0,
+                    -1.0  + (rand() % 200) / 100.0,
+                    -1.0  + (rand() % 200) / 100.0,
+                    -1.0  + (rand() % 200) / 100.0);
+
+                /* Corrientes de motores (ACS712, 6 motores: FR FL CR CL RR RL) */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "i_FR_mA=%d i_FL_mA=%d i_CR_mA=%d i_CL_mA=%d i_RR_mA=%d i_RL_mA=%d\n",
+                    600 + rand() % 500, 600 + rand() % 500,
+                    600 + rand() % 500, 600 + rand() % 500,
+                    600 + rand() % 500, 600 + rand() % 500);
+
+                /* Temperaturas: LM335 ambiente + 6 NTC celdas 18650 */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "t_amb_C=%.1f t_B1A_C=%.1f t_B1B_C=%.1f t_B2A_C=%.1f "
+                    "t_B2B_C=%.1f t_B3A_C=%.1f t_B3B_C=%.1f\n",
+                    20.0 + (rand() % 200) / 10.0,
+                    25.0 + (rand() % 100) / 10.0, 25.0 + (rand() % 100) / 10.0,
+                    25.0 + (rand() % 100) / 10.0, 25.0 + (rand() % 100) / 10.0,
+                    25.0 + (rand() % 100) / 10.0, 25.0 + (rand() % 100) / 10.0);
+
+                /* Encoders cuadratura (6 ruedas, pulsos acumulados) */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "enc_FR=%ld enc_FL=%ld enc_CR=%ld enc_CL=%ld enc_RR=%ld enc_RL=%ld\n",
+                    140000L + rand() % 5000, 140000L + rand() % 5000,
+                    140000L + rand() % 5000, 140000L + rand() % 5000,
+                    140000L + rand() % 5000, 140000L + rand() % 5000);
+
+                /* Estado consolidado */
+                n += snprintf(tlm + n, sizeof(tlm) - n,
+                    "status=NOMINAL mode=IDLE faults=0\n");
+
+                printf("Enviando telemetria completa via SFP...\n");
+                printf("Telemetria: %d B — SFP MTU=200 — fragmentos estimados: %d\n",
+                       n, (n + 199) / 200);
+
+                int err = csp_sfp_send(conn, tlm, (unsigned int)n, 200, 7200000);
+                printf("SFP send result: %d\n", err);
+
+                csp_buffer_free(packet);
+                continue;
+            }
+
             /* ── Sensoress──────────────────────── */
             char respuesta[128];
 

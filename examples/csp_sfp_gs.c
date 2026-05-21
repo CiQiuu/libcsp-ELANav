@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
     csp_rtable_set(0, 0, iface, CSP_NO_VIA_ADDRESS);
     router_start();
 
-    printf("Comandos: t=temperatura  h=humedad  s=sensor  i=imagen  q=salir\n");
+    printf("Comandos: t=temperatura  h=humedad  s=sensor  d=datos  i=imagen  v=video  q=salir\n");
 
     /* ── Loop principal ─────────────────────────────────────────────── */
 
@@ -182,6 +182,70 @@ int main(int argc, char *argv[]) {
                 } else {
                     printf("ERROR: no se pudo abrir gs_received_image.jpg\n");
                 }
+                free(data);
+            } else {
+                printf("ERROR SFP: %d (%.2f s)\n", err, elapsed);
+            }
+
+        } else if (strcmp(cmd, "v") == 0) {
+
+            printf("Esperando video SFP (timeout=2h, sesion larga esperada)...\n");
+            void *data = NULL;
+            int   size = 0;
+
+            TMARK("csp_sfp_recv inicio");
+            struct timespec t0, t1;
+            clock_gettime(CLOCK_MONOTONIC, &t0);
+
+            int err = csp_sfp_recv(conn, &data, &size, 7200000);
+
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            double elapsed = (t1.tv_sec - t0.tv_sec) +
+                             (t1.tv_nsec - t0.tv_nsec) / 1e9;
+            TMARK("csp_sfp_recv retorno");
+
+            if (err == CSP_ERR_NONE && data) {
+                printf("Video recibido: %d bytes\n", size);
+                printf("Tiempo de transferencia SFP: %.2f s (%.2f min)\n",
+                       elapsed, elapsed / 60.0);
+                printf("Goodput: %.2f B/s\n", size / elapsed);
+                FILE *fp = fopen("gs_received_video.mp4", "wb");
+                if (fp) {
+                    fwrite(data, 1, (size_t)size, fp);
+                    fclose(fp);
+                    printf("Guardado en gs_received_video.mp4\n");
+                } else {
+                    printf("ERROR: no se pudo abrir gs_received_video.mp4\n");
+                }
+                free(data);
+            } else {
+                printf("ERROR SFP: %d (%.2f s)\n", err, elapsed);
+            }
+
+        } else if (strcmp(cmd, "d") == 0) {
+
+            printf("Esperando telemetria completa SFP (timeout=30s)...\n");
+            void *data = NULL;
+            int   size = 0;
+
+            TMARK("csp_sfp_recv inicio");
+            struct timespec t0, t1;
+            clock_gettime(CLOCK_MONOTONIC, &t0);
+
+            int err = csp_sfp_recv(conn, &data, &size, 30000);
+
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            double elapsed = (t1.tv_sec - t0.tv_sec) +
+                             (t1.tv_nsec - t0.tv_nsec) / 1e9;
+            TMARK("csp_sfp_recv retorno");
+
+            if (err == CSP_ERR_NONE && data) {
+                printf("Telemetria recibida: %d bytes en %.2f s (%.1f B/s)\n",
+                       size, elapsed, size / elapsed);
+                printf("--- TELEMETRIA OLYMPUS ---\n");
+                fwrite(data, 1, (size_t)size, stdout);
+                if (size > 0 && ((char *)data)[size - 1] != '\n') printf("\n");
+                printf("--- fin telemetria ---\n");
                 free(data);
             } else {
                 printf("ERROR SFP: %d (%.2f s)\n", err, elapsed);
