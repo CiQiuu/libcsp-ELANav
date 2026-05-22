@@ -1,0 +1,66 @@
+2026-05-22 15:12:39  === GS START ===
+2026-05-22 15:12:39  Device: /dev/ttyACM0  addr=10  rover=20  port=10  packet_timeout_ms=5000
+2026-05-22 15:12:39  Comandos: t=temperatura  h=humedad  s=sensor  d=datos  i=imagen  v=video  q=salir
+2026-05-22 15:12:42  cmd> 
+2026-05-22 15:12:42  === Comando 'v' ===
+2026-05-22 15:12:42    [T+     0.0 ms] inicio (T=0)
+2026-05-22 15:12:42    [T+     0.0 ms] csp_connect inicio
+2026-05-22 15:12:42  [34mRDP 0x72a185b12ff8: Active connect, conn state 0
+2026-05-22 15:12:42  [0m[34mRDP 0x72a185b12ff8: AC: Sending SYN
+2026-05-22 15:12:42  [0m[34mRDP 0x72a185b12ff8: Send CMP S 1: syn 1, ack 0, eack 0, rst 0, seq_nr 17778, ack_nr     0, packet_len 29 (24)
+2026-05-22 15:12:42  [0m[34mRDP 0x72a185b12ff8: AC: Waiting for SYN/ACK reply...
+2026-05-22 15:12:47  [0m[34mRDP 0x72a185b12ff8: TX Element timed out, retransmitting seq 17778
+2026-05-22 15:12:49  [0m[34mRDP 0x72a185b12ff8: Received in S 1: syn 1, ack 1, eack 0, rst 0, seq_nr 17545, ack_nr 17778, packet_len 5 (0)
+2026-05-22 15:12:49  [0m[34mRDP 0x72a185b12ff8: NP: Connection OPEN
+2026-05-22 15:12:49  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17779, ack_nr 17545, packet_len 5 (0)
+2026-05-22 15:12:49  [0m[34mRDP 0x72a185b12ff8: Wake Tx task (ack)
+2026-05-22 15:12:49  [0m[34mRDP 0x72a185b12ff8: TX Element Free, time 402231, seq 17778, una 17779
+2026-05-22 15:12:49  [0m[34mRDP 0x72a185b12ff8: AC: Connection OPEN
+2026-05-22 15:12:49  [0m  [T+  6900.4 ms] csp_connect OK (handshake completo)
+2026-05-22 15:12:49    [T+  6900.4 ms] csp_send inicio
+2026-05-22 15:12:49  [34mRDP 0x72a185b12ff8: Sending  in S 3: syn 0, ack 4, eack 0, rst 0, seq_nr 17779, ack_nr 17545, packet_len 7 (2)
+2026-05-22 15:12:49  [0m  [T+  6900.5 ms] csp_send OK
+2026-05-22 15:12:49  Esperando video SFP (timeout=8h, sesion larga esperada)...
+2026-05-22 15:12:49    [T+  6900.5 ms] csp_sfp_recv inicio
+2026-05-22 15:12:51  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17546, ack_nr 17779, packet_len 5 (0)
+2026-05-22 15:12:51  [0m[34mRDP 0x72a185b12ff8: TX Element Free, time 404111, seq 17779, una 17780
+2026-05-22 15:12:51  [0m[34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17546, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:51  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17546, packet_len 5 (0)
+2026-05-22 15:12:51  [0mSFP RECV fragment: offset=0 len=200 total=2684090
+2026-05-22 15:12:52  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17547, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:52  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17547, packet_len 5 (0)
+2026-05-22 15:12:52  [0mSFP RECV fragment: offset=200 len=200 total=2684090
+2026-05-22 15:12:52  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17548, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:52  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17548, packet_len 5 (0)
+2026-05-22 15:12:52  [0mSFP RECV fragment: offset=400 len=200 total=2684090
+2026-05-22 15:12:52  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17549, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:52  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17549, packet_len 5 (0)
+2026-05-22 15:12:52  [0mSFP RECV fragment: offset=600 len=200 total=2684090
+2026-05-22 15:12:54  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17550, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:54  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17550, packet_len 5 (0)
+2026-05-22 15:12:54  [0mSFP RECV fragment: offset=800 len=200 total=2684090
+2026-05-22 15:12:54  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17551, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:54  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17551, packet_len 5 (0)
+2026-05-22 15:12:54  [0mSFP RECV fragment: offset=1000 len=200 total=2684090
+2026-05-22 15:12:54  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17552, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:54  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17552, packet_len 5 (0)
+2026-05-22 15:12:54  [0mSFP RECV fragment: offset=1200 len=200 total=2684090
+2026-05-22 15:12:54  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17553, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:54  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17553, packet_len 5 (0)
+2026-05-22 15:12:54  [0mSFP RECV fragment: offset=1400 len=200 total=2684090
+2026-05-22 15:12:57  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17554, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:57  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17554, packet_len 5 (0)
+2026-05-22 15:12:57  [0mSFP RECV fragment: offset=1600 len=200 total=2684090
+2026-05-22 15:12:57  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17555, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:57  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17555, packet_len 5 (0)
+2026-05-22 15:12:57  [0mSFP RECV fragment: offset=1800 len=200 total=2684090
+2026-05-22 15:12:57  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17556, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:57  [0m[34mRDP 0x72a185b12ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17780, ack_nr 17556, packet_len 5 (0)
+2026-05-22 15:12:57  [0mSFP RECV fragment: offset=2000 len=200 total=2684090
+2026-05-22 15:12:59  [34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17558, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:59  [0m[34mRDP 0x72a185b12ff8: Add to RX queue 17558
+2026-05-22 15:12:59  [0m[34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17559, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:12:59  [0m[34mRDP 0x72a185b12ff8: Add to RX queue 17559
+2026-05-22 15:13:00  [0m[34mRDP 0x72a185b12ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 17560, ack_nr 17779, packet_len 213 (208)
+2026-05-22 15:13:00  [0m[34mRDP 0x72a185b12ff8: Add to RX queue 17560
+2026-05-22 15:13:01  [0m

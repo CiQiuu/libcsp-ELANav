@@ -1,0 +1,12 @@
+2026-05-22 15:14:31  === GS START ===
+2026-05-22 15:14:31  Device: /dev/ttyACM0  addr=10  rover=20  port=10  packet_timeout_ms=5000
+2026-05-22 15:14:31  Comandos: t=temperatura  h=humedad  s=sensor  d=datos  i=imagen  v=video  q=salir
+2026-05-22 15:14:34  cmd> 
+2026-05-22 15:14:34  === Comando 'i' ===
+2026-05-22 15:14:34    [T+     0.0 ms] inicio (T=0)
+2026-05-22 15:14:34    [T+     0.0 ms] csp_connect inicio
+2026-05-22 15:14:34  [34mRDP 0x7a77f2a14ff8: Active connect, conn state 0
+2026-05-22 15:14:34  [0m[34mRDP 0x7a77f2a14ff8: AC: Sending SYN
+2026-05-22 15:14:34  [0m[34mRDP 0x7a77f2a14ff8: Send CMP S 1: syn 1, ack 0, eack 0, rst 0, seq_nr 22733, ack_nr     0, packet_len 29 (24)
+2026-05-22 15:14:34  [0m[34mRDP 0x7a77f2a14ff8: AC: Waiting for SYN/ACK reply...
+2026-05-22 15:14:39  [0m

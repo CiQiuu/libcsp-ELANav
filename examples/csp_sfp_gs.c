@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
 
         if (strcmp(cmd, "i") == 0) {
 
-            printf("Esperando imagen SFP (timeout=2h)...\n");
+            printf("Esperando imagen SFP (timeout=8h)...\n");
             void *data = NULL;
             int   size = 0;
 
@@ -163,7 +163,7 @@ int main(int argc, char *argv[]) {
             struct timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
 
-            int err = csp_sfp_recv(conn, &data, &size, 7200000);
+            int err = csp_sfp_recv(conn, &data, &size, 28800000);
 
             clock_gettime(CLOCK_MONOTONIC, &t1);
             double elapsed = (t1.tv_sec - t0.tv_sec) +
@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
 
         } else if (strcmp(cmd, "v") == 0) {
 
-            printf("Esperando video SFP (timeout=2h, sesion larga esperada)...\n");
+            printf("Esperando video SFP (timeout=8h, sesion larga esperada)...\n");
             void *data = NULL;
             int   size = 0;
 
@@ -197,7 +197,7 @@ int main(int argc, char *argv[]) {
             struct timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
 
-            int err = csp_sfp_recv(conn, &data, &size, 7200000);
+            int err = csp_sfp_recv(conn, &data, &size, 28800000);
 
             clock_gettime(CLOCK_MONOTONIC, &t1);
             double elapsed = (t1.tv_sec - t0.tv_sec) +

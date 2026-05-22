@@ -1,0 +1,41 @@
+2026-05-22 15:09:23  === GS START ===
+2026-05-22 15:09:23  Device: /dev/ttyACM0  addr=10  rover=20  port=10  packet_timeout_ms=5000
+2026-05-22 15:09:23  Comandos: t=temperatura  h=humedad  s=sensor  d=datos  i=imagen  v=video  q=salir
+2026-05-22 15:09:26  cmd> 
+2026-05-22 15:09:26  === Comando 'v' ===
+2026-05-22 15:09:26    [T+     0.0 ms] inicio (T=0)
+2026-05-22 15:09:26    [T+     0.0 ms] csp_connect inicio
+2026-05-22 15:09:26  [34mRDP 0x70a408ca0ff8: Active connect, conn state 0
+2026-05-22 15:09:26  [0m[34mRDP 0x70a408ca0ff8: AC: Sending SYN
+2026-05-22 15:09:26  [0m[34mRDP 0x70a408ca0ff8: Send CMP S 1: syn 1, ack 0, eack 0, rst 0, seq_nr 24146, ack_nr     0, packet_len 29 (24)
+2026-05-22 15:09:26  [0m[34mRDP 0x70a408ca0ff8: AC: Waiting for SYN/ACK reply...
+2026-05-22 15:09:28  [0m[34mRDP 0x70a408ca0ff8: Received in S 1: syn 1, ack 1, eack 0, rst 0, seq_nr 37625, ack_nr 24146, packet_len 5 (0)
+2026-05-22 15:09:28  [0m[34mRDP 0x70a408ca0ff8: NP: Connection OPEN
+2026-05-22 15:09:28  [0m[34mRDP 0x70a408ca0ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 24147, ack_nr 37625, packet_len 5 (0)
+2026-05-22 15:09:28  [0m[34mRDP 0x70a408ca0ff8: Wake Tx task (ack)
+2026-05-22 15:09:28  [0m[34mRDP 0x70a408ca0ff8: TX Element Free, time 200886, seq 24146, una 24147
+2026-05-22 15:09:28  [0m[34mRDP 0x70a408ca0ff8: AC: Connection OPEN
+2026-05-22 15:09:28  [0m  [T+  1894.1 ms] csp_connect OK (handshake completo)
+2026-05-22 15:09:28    [T+  1894.1 ms] csp_send inicio
+2026-05-22 15:09:28  [34mRDP 0x70a408ca0ff8: Sending  in S 3: syn 0, ack 4, eack 0, rst 0, seq_nr 24147, ack_nr 37625, packet_len 7 (2)
+2026-05-22 15:09:28  [0m  [T+  1894.1 ms] csp_send OK
+2026-05-22 15:09:28  Esperando video SFP (timeout=8h, sesion larga esperada)...
+2026-05-22 15:09:28    [T+  1894.1 ms] csp_sfp_recv inicio
+2026-05-22 15:09:30  [34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37626, ack_nr 24147, packet_len 5 (0)
+2026-05-22 15:09:30  [0m[34mRDP 0x70a408ca0ff8: TX Element Free, time 202780, seq 24147, una 24148
+2026-05-22 15:09:30  [0m[34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37626, ack_nr 24147, packet_len 213 (208)
+2026-05-22 15:09:30  [0m[34mRDP 0x70a408ca0ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 24148, ack_nr 37626, packet_len 5 (0)
+2026-05-22 15:09:30  [0mSFP RECV fragment: offset=0 len=200 total=2684090
+2026-05-22 15:09:30  [34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37627, ack_nr 24147, packet_len 213 (208)
+2026-05-22 15:09:30  [0m[34mRDP 0x70a408ca0ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 24148, ack_nr 37627, packet_len 5 (0)
+2026-05-22 15:09:30  [0mSFP RECV fragment: offset=200 len=200 total=2684090
+2026-05-22 15:09:32  [34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37630, ack_nr 24147, packet_len 213 (208)
+2026-05-22 15:09:32  [0m[34mRDP 0x70a408ca0ff8: Add to RX queue 37630
+2026-05-22 15:09:32  [0m[34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37631, ack_nr 24147, packet_len 213 (208)
+2026-05-22 15:09:32  [0m[34mRDP 0x70a408ca0ff8: Add to RX queue 37631
+2026-05-22 15:09:35  [0m[34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37628, ack_nr 24147, packet_len 213 (208)
+2026-05-22 15:09:35  [0m[34mRDP 0x70a408ca0ff8: Send CMP S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 24148, ack_nr 37628, packet_len 5 (0)
+2026-05-22 15:09:35  [0mSFP RECV fragment: offset=400 len=200 total=2684090
+2026-05-22 15:09:36  [34mRDP 0x70a408ca0ff8: Received in S 3: syn 0, ack 1, eack 0, rst 0, seq_nr 37632, ack_nr 24147, packet_len 213 (208)
+2026-05-22 15:09:36  [0m[34mRDP 0x70a408ca0ff8: Add to RX queue 37632
+2026-05-22 15:09:37  [0m

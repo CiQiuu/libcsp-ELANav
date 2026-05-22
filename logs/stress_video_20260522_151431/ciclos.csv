@@ -1,0 +1,2 @@
+ciclo,inicio,fin,duracion_s,resultado,bytes,elapsed_sfp_s,goodput_Bps,md5_match,exitosos_acum,fallidos_acum
+1,2026-05-22 15:14:34,2026-05-22 15:14:39,4.9,TIMEOUT,,,,,0,1

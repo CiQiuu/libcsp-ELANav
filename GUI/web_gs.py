@@ -18,8 +18,12 @@ from flask import Flask, render_template_string, send_file
 from flask_socketio import SocketIO, emit
 
 # ── Configuration ────────────────────────────────────────────────────────────────
-GS_BINARY   = os.path.join(os.path.dirname(os.path.abspath(__file__)),"build/examples/csp_sfp_gs")
-IMAGE_OUT   = os.path.join(os.path.dirname(os.path.abspath(__file__)),"gs_received_image.jpg")
+BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+GS_BINARY   = os.path.join(BASE_DIR, "build/examples/csp_sfp_gs")
+# El binario hace fopen() con ruta RELATIVA, por eso lanzamos el proceso con
+# cwd=BASE_DIR y leemos los archivos desde ahí: así coinciden siempre.
+IMAGE_OUT   = os.path.join(BASE_DIR, "gs_received_image.jpg")
+VIDEO_OUT   = os.path.join(BASE_DIR, "gs_received_video.mp4")
 DEFAULT_DEV = "/dev/ttyACM0"
 
 app = Flask(__name__)
@@ -31,6 +35,7 @@ state = {
     "gs_proc":   None,
     "device":    DEFAULT_DEV,
     "log":       [],
+    "tele_buf":  None,   # acumulador del bloque TELEMETRIA OLYMPUS
 }
 
 def strip_ansi(s):
@@ -45,8 +50,26 @@ def parse_line(line: str):
     line = strip_ansi(line.strip())
     if not line:
         return
+
+    # ── Captura del bloque de telemetría completa (comando 'd') ──────────
+    if state["tele_buf"] is not None:
+        if "fin telemetria" in line.lower():
+            raw = "\n".join(state["tele_buf"])
+            sio.emit("telemetry", {"raw": raw, "ts": time.time()})
+            emit_log(f"Telemetría completa recibida ({len(raw)} chars).", level="ok")
+            state["tele_buf"] = None
+        else:
+            state["tele_buf"].append(line)
+            emit_log(line, level="info")
+        return
+    if "TELEMETRIA OLYMPUS" in line:
+        state["tele_buf"] = []
+        emit_log(line, level="ok")
+        return
+
     level = "rdp" if ("RDP" in line or "Send CMP" in line or "Received in" in line) else "info"
     emit_log(line, level=level)
+
     if "CONNECTED" in line:
         state["connected"] = True
         sio.emit("status", {"connected": True})
@@ -55,17 +78,39 @@ def parse_line(line: str):
         sio.emit("status", {"connected": False})
     elif line.startswith("RESP:"):
         sio.emit("sensor", {"raw": line[5:].strip(), "ts": time.time()})
-    elif "Guardada en" in line or "gs_received_image" in line:
+    elif "Guardada en" in line and "image" in line:
         _send_image()
+    elif "Guardado en" in line and "video" in line:
+        _send_video()
     elif "ERROR SFP" in line:
         emit_log(line, level="error")
 
 def _send_image():
-    if os.path.exists(IMAGE_OUT):
+    # Pequeña espera + reintento: el print "Guardada en" puede salir antes
+    # de que el flush a disco termine en algunas plataformas.
+    for _ in range(5):
+        if os.path.exists(IMAGE_OUT) and os.path.getsize(IMAGE_OUT) > 0:
+            break
+        time.sleep(0.2)
+    if os.path.exists(IMAGE_OUT) and os.path.getsize(IMAGE_OUT) > 0:
         with open(IMAGE_OUT, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
         sio.emit("image", {"data": b64, "ts": time.time()})
-        emit_log("Imagen recibida y enviada al browser.", level="ok")
+        emit_log(f"Imagen recibida y enviada al browser ({os.path.getsize(IMAGE_OUT)} B).", level="ok")
+    else:
+        emit_log(f"Imagen no encontrada en {IMAGE_OUT}", level="error")
+
+def _send_video():
+    for _ in range(10):
+        if os.path.exists(VIDEO_OUT) and os.path.getsize(VIDEO_OUT) > 0:
+            break
+        time.sleep(0.3)
+    if os.path.exists(VIDEO_OUT) and os.path.getsize(VIDEO_OUT) > 0:
+        size = os.path.getsize(VIDEO_OUT)
+        sio.emit("video", {"url": "/video", "size": size, "ts": time.time()})
+        emit_log(f"Video recibido ({size} B). Disponible en /video", level="ok")
+    else:
+        emit_log(f"Video no encontrado en {VIDEO_OUT}", level="error")
 
 def _reader_thread(proc):
     for raw in iter(proc.stdout.readline, b""):
@@ -105,6 +150,7 @@ def on_start(data):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=0,
+            cwd=BASE_DIR,
         )
         state["gs_proc"] = proc
         t = threading.Thread(target=_reader_thread, args=(proc,), daemon=True)
@@ -158,6 +204,12 @@ def image():
     if os.path.exists(IMAGE_OUT):
         return send_file(IMAGE_OUT, mimetype="image/jpeg")
     return "No image", 404
+
+@app.route("/video")
+def video():
+    if os.path.exists(VIDEO_OUT):
+        return send_file(VIDEO_OUT, mimetype="video/mp4")
+    return "No video", 404
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ELANav GS Web Interface")

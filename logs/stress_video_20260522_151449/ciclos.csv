@@ -1,0 +1,4 @@
+ciclo,inicio,fin,duracion_s,resultado,bytes,elapsed_sfp_s,goodput_Bps,md5_match,exitosos_acum,fallidos_acum
+1,2026-05-22 15:14:52,2026-05-22 15:15:01,9.5,OK_MD5_FAIL,2048,7.56,270.82,NO(f9e94e9c),1,0
+2,2026-05-22 15:15:31,2026-05-22 15:15:43,11.9,OK_MD5_FAIL,2048,10.54,194.33,NO(f9e94e9c),2,0
+3,2026-05-22 15:16:13,2026-05-22 15:16:35,21.3,OK_MD5_FAIL,2048,20.03,102.26,NO(f9e94e9c),3,0
