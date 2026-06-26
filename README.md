@@ -15,7 +15,7 @@ Este repositorio extiende la pila CSP con el módulo **SFP (Small Fragmentation 
                  ▲           │
    UHF 436,5 MHz │           │ UHF 436,5 MHz
    CSP/AX.25     │           ▼
-   9600 baud     │       Estación de tierra
+   9600 baud     │       Grouns station
                  │
               Rover
    (trayecto directo obstruido por el terreno —
